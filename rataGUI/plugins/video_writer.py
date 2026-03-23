@@ -45,6 +45,7 @@ class VideoWriter(BasePlugin):
             "gray",
         ],
         "Write Frame Index": True,
+        "Buffer Size (frames)": 120,
     }
 
     DISPLAY_CONFIG_MAP = {
@@ -77,6 +78,8 @@ class VideoWriter(BasePlugin):
                     self.save_dir = os.path.normpath(value)
             elif prop_name == "Write Frame Index":
                 self.write_frame_index = value
+            elif prop_name == "Buffer Size (frames)":
+                self.buffer_size = int(value)
             elif prop_name == "filename suffix":
                 self.file_name = slugify(cam_widget.camera.getDisplayName())
                 if len(value)>0:
@@ -139,6 +142,7 @@ class VideoWriter(BasePlugin):
             input_dict=self.input_params,
             output_dict=self.output_params,
             verbosity=0,
+            buffer_size=getattr(self, 'buffer_size', 120),
         )
 
     def process(self, frame, metadata):
@@ -208,7 +212,8 @@ class FFMPEG_Writer:
                 if data is None:  # Sentinel: shutdown
                     break
                 try:
-                    self._proc.stdin.write(data)
+                    # Write numpy buffer directly via memoryview — zero-copy to pipe
+                    self._proc.stdin.write(memoryview(data))
                 except IOError as err:
                     self._write_error = err
                     break
@@ -251,20 +256,23 @@ class FFMPEG_Writer:
             out_args.append('8M')
         """
 
-        cmd = [self._FFMPEG_PATH, "-y", "-f", "rawvideo"] + in_args + ["-i", "-", '-an'] + out_args + [self.file_path]
+        cmd = [self._FFMPEG_PATH, "-y", "-f", "rawvideo"] + in_args + ["-i", "-", '-an', '-threads', '0'] + out_args + [self.file_path]
 
         self._cmd = " ".join(cmd)
 
+        # Use 1MB pipe buffer to reduce write syscalls for large frames
+        pipe_bufsize = 1024 * 1024
+
         if self.verbosity >= 2:
             logger.info(cmd)
-            self._proc = sp.Popen(cmd, stdin=sp.PIPE, stdout=sp.PIPE, stderr=None)
+            self._proc = sp.Popen(cmd, stdin=sp.PIPE, stdout=sp.PIPE, stderr=None, bufsize=pipe_bufsize)
         elif self.verbosity == 1:
             cmd += ["-v", "warning"]
             logger.info(cmd)
-            self._proc = sp.Popen(cmd, stdin=sp.PIPE, stdout=sp.PIPE, stderr=None)
+            self._proc = sp.Popen(cmd, stdin=sp.PIPE, stdout=sp.PIPE, stderr=None, bufsize=pipe_bufsize)
         else:
             self._proc = sp.Popen(
-                cmd, stdin=sp.PIPE, stdout=sp.DEVNULL, stderr=sp.STDOUT
+                cmd, stdin=sp.PIPE, stdout=sp.DEVNULL, stderr=sp.STDOUT, bufsize=pipe_bufsize
             )
 
         self._write_thread = threading.Thread(target=self._write_loop, daemon=True)
@@ -282,10 +290,11 @@ class FFMPEG_Writer:
             msg = f"{str(self._write_error)}\n\n FFMPEG COMMAND:{self._cmd}\n"
             raise IOError(msg)
 
-        img_array = img_array.astype(np.uint8)
+        # Ensure uint8 C-contiguous layout; no-copy when already correct
+        img_array = np.ascontiguousarray(img_array, dtype=np.uint8)
 
-        # Enqueue frame bytes; blocks if buffer is full (backpressure)
-        self._write_queue.put(img_array.tobytes())
+        # Enqueue numpy array directly; byte serialization deferred to writer thread
+        self._write_queue.put(img_array)
 
     def close(self):
         """Closes the writer, flushing all buffered frames before terminating."""

@@ -18,8 +18,9 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# process_pool = ProcessPoolExecutor()
-thread_pool = ThreadPoolExecutor()
+# Shared bounded thread pool for camera I/O and blocking plugin execution.
+# Sized for up to 4 cameras with acquisition + blocking plugin threads each.
+thread_pool = ThreadPoolExecutor(max_workers=8)
 
 EXP_AVG_DECAY = 0.8
 
@@ -127,7 +128,7 @@ class CameraWidget(QtWidgets.QWidget, Ui_CameraWidget):
             while self.camera._running:
                 if self.active:
                     status, frame = await loop.run_in_executor(
-                        None, self.camera.readCamera
+                        thread_pool, self.camera.readCamera
                     )
                     metadata = self.camera.getMetadata()
                     metadata["Camera Name"] = self.camera.getDisplayName()
@@ -180,7 +181,7 @@ class CameraWidget(QtWidgets.QWidget, Ui_CameraWidget):
                 if plugin.active:
                     if plugin.blocking:  # possibly move queues outside plugins
                         result = await loop.run_in_executor(
-                            None, plugin.process, frame, metadata
+                            thread_pool, plugin.process, frame, metadata
                         )
                     else:
                         result = plugin.process(frame, metadata)

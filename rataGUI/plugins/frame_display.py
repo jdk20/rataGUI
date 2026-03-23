@@ -3,6 +3,7 @@ from rataGUI.plugins.base_plugin import BasePlugin
 from PyQt6 import QtGui
 from PyQt6.QtCore import Qt, QObject, pyqtSignal
 
+import cv2
 import logging
 
 logger = logging.getLogger(__name__)
@@ -45,22 +46,24 @@ class FrameDisplay(BasePlugin):
         self.interval = max(0,self.interval-1)
         if self.interval == 0:
             img_h, img_w, num_ch = frame.shape
+            target_w, target_h = self.frame_width, self.frame_height
 
-            # Convert to pixmap and set to video frame
+            # Downscale with cv2 before creating QImage — faster than Qt scaling
+            # and produces a smaller QImage, reducing memory and QPixmap conversion cost
+            if img_w != target_w or img_h != target_h:
+                if self.config.get("Aspect ratio"):
+                    scale = min(target_w / img_w, target_h / img_h)
+                    new_w = int(img_w * scale)
+                    new_h = int(img_h * scale)
+                else:
+                    new_w, new_h = target_w, target_h
+                frame = cv2.resize(frame, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
+                img_h, img_w, num_ch = frame.shape
+
             bytes_per_line = num_ch * img_w
             qt_image = QtGui.QImage(
                 frame.data, img_w, img_h, bytes_per_line, QtGui.QImage.Format.Format_RGB888
             )
-            if self.config.get("Aspect ratio"):
-                qt_image = qt_image.scaled(
-                    self.frame_width, self.frame_height, Qt.AspectRatioMode.KeepAspectRatio
-                )
-            else:
-                qt_image = qt_image.scaled(
-                    self.frame_width,
-                    self.frame_height,
-                    Qt.AspectRatioMode.IgnoreAspectRatio,
-                )
 
             self.signal.image.emit(qt_image)
             self.interval = self.config.get("Fixed Interval")
