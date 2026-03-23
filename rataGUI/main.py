@@ -29,14 +29,23 @@ if args.start_menu:
 import os
 import sys
 
-# Fix DLL loading on Windows for PyQt6
-# See: https://doc.qt.io/qt-6/windows-issues.html
+# Fix DLL loading on Windows for PyQt6.
+# In conda environments, conflicting Qt DLLs in Library/bin can be loaded
+# instead of PyQt6's bundled DLLs, causing "DLL load failed" errors.
+# Prepending PyQt6's Qt6/bin to PATH ensures the correct DLLs are found first.
 if sys.platform == "win32":
     import PyQt6
-    pyqt6_dir = os.path.dirname(PyQt6.__file__)
-    qt6_bin = os.path.join(pyqt6_dir, "Qt6", "bin")
+
+    pyqt6_path = os.path.dirname(PyQt6.__file__)
+    qt6_bin = os.path.join(pyqt6_path, "Qt6", "bin")
+    qt6_plugins = os.path.join(pyqt6_path, "Qt6", "plugins")
+
     if os.path.isdir(qt6_bin):
+        os.environ["PATH"] = qt6_bin + os.pathsep + os.environ.get("PATH", "")
         os.add_dll_directory(qt6_bin)
+
+    if os.path.isdir(qt6_plugins):
+        os.environ["QT_PLUGIN_PATH"] = qt6_plugins
 
 import darkdetect
 from PyQt6.QtWidgets import QApplication
