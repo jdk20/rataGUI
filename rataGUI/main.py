@@ -27,6 +27,17 @@ if args.start_menu:
     launch_config["Don't show again"] = False
 
 import os
+import sys
+
+# Fix DLL loading on Windows for PyQt6
+# See: https://doc.qt.io/qt-6/windows-issues.html
+if sys.platform == "win32":
+    import PyQt6
+    pyqt6_dir = os.path.dirname(PyQt6.__file__)
+    qt6_bin = os.path.join(pyqt6_dir, "Qt6", "bin")
+    if os.path.isdir(qt6_bin):
+        os.add_dll_directory(qt6_bin)
+
 import darkdetect
 from PyQt6.QtWidgets import QApplication
 
