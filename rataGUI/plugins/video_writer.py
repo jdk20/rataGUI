@@ -174,6 +174,7 @@ class VideoWriter(BasePlugin):
         extension = ".mp4"
 
         # Configure codec-specific parameters
+        self._use_hwaccel = False
         vcodec = self.output_params.get("-vcodec")
         if vcodec in ["rawvideo"]:
             extension = ".raw"
@@ -207,6 +208,7 @@ class VideoWriter(BasePlugin):
             verbosity=0,
             buffer_size=getattr(self, 'buffer_size', 120),
             gpu_pixel_conversion=self.gpu_pixel_conversion and vcodec in ['h264_nvenc', 'hevc_nvenc'],
+            use_hwaccel=self._use_hwaccel,
         )
 
     def _configure_nvenc(self, vcodec, config):
@@ -295,6 +297,11 @@ class VideoWriter(BasePlugin):
             logger.warning(f"Pixel format '{pix_fmt}' is not supported by {vcodec}, defaulting to yuv420p")
             self.output_params['-pix_fmt'] = 'yuv420p'
 
+        # --- CUDA hardware acceleration ---
+        if self.gpu_pixel_conversion:
+            self._use_hwaccel = True
+            logger.info("CUDA hardware acceleration enabled for %s", vcodec)
+
     def _validate_cpu_preset(self, vcodec):
         """Validate that an NVENC-only preset isn't used with a CPU codec."""
         preset = self.output_params.get("-preset")
@@ -342,7 +349,7 @@ class FFMPEG_Writer:
     """
 
     def __init__(self, file_path, input_dict={}, output_dict={}, verbosity=0,
-                 buffer_size=120, gpu_pixel_conversion=False):
+                 buffer_size=120, gpu_pixel_conversion=False, use_hwaccel=False):
 
         self.file_path = os.path.abspath(os.path.normpath(file_path))
         dir_path = os.path.dirname(self.file_path)
@@ -356,6 +363,7 @@ class FFMPEG_Writer:
         self.verbosity = verbosity
         self.initialized = False
         self.gpu_pixel_conversion = gpu_pixel_conversion
+        self.use_hwaccel = use_hwaccel
 
         self._FFMPEG_PATH = which("ffmpeg")
 
@@ -414,12 +422,19 @@ class FFMPEG_Writer:
             pix_fmt = self.output_dict.get('-pix_fmt', 'yuv420p')
             out_args = ['-vf', f'format={pix_fmt},hwupload_cuda'] + out_args
 
-        cmd = [self._FFMPEG_PATH, "-y", "-f", "rawvideo"] + in_args + ["-i", "-", '-an', '-threads', '0'] + out_args + [self.file_path]
+        # CUDA hardware acceleration: add hwaccel flags before input
+        hwaccel_args = []
+        if self.use_hwaccel:
+            hwaccel_args = ['-hwaccel', 'cuda', '-hwaccel_output_format', 'cuda']
+            logger.info("Adding CUDA hwaccel flags to ffmpeg command")
+
+        cmd = [self._FFMPEG_PATH, "-y", "-f", "rawvideo"] + hwaccel_args + in_args + ["-i", "-", '-an', '-threads', '0'] + out_args + [self.file_path]
 
         self._cmd = " ".join(cmd)
 
-        # Use 1MB pipe buffer to reduce write syscalls for large frames
-        pipe_bufsize = 1024 * 1024
+        # Use 2MB pipe buffer when hwaccel is active (larger frames benefit),
+        # otherwise 1MB
+        pipe_bufsize = 2 * 1024 * 1024 if self.use_hwaccel else 1024 * 1024
 
         if self.verbosity >= 2:
             logger.info(cmd)
