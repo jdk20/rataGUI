@@ -12,6 +12,40 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+# Cached NVIDIA driver version (None = not yet checked, False = unavailable)
+_nvidia_driver_version_cache = None
+
+
+def _get_nvidia_driver_version():
+    """Query the NVIDIA driver major version via nvidia-smi.
+
+    Returns the major version as an int (e.g. 535), or None if
+    nvidia-smi is unavailable or the version cannot be parsed.
+    The result is cached for the lifetime of the process.
+    """
+    global _nvidia_driver_version_cache
+    if _nvidia_driver_version_cache is not None:
+        return _nvidia_driver_version_cache if _nvidia_driver_version_cache is not False else None
+
+    import subprocess as sp
+    try:
+        result = sp.run(
+            ["nvidia-smi", "--query-gpu=driver_version", "--format=csv,noheader,nounits"],
+            capture_output=True, text=True, timeout=5,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            version_str = result.stdout.strip().splitlines()[0]
+            major = int(version_str.split(".")[0])
+            _nvidia_driver_version_cache = major
+            logger.info(f"Detected NVIDIA driver version: {version_str} (major={major})")
+            return major
+    except Exception as err:
+        logger.debug(f"Could not detect NVIDIA driver version: {err}")
+
+    _nvidia_driver_version_cache = False
+    return None
+
+
 class VideoWriter(BasePlugin):
     """
     Plugin that writes frames to video file using FFMPEG
@@ -25,13 +59,20 @@ class VideoWriter(BasePlugin):
         "vcodec": ["libx264", "libx265", "h264_nvenc", "hevc_nvenc", "rawvideo"],
         "framerate": 30,
         "speed (preset)": [
-            "fast",
-            "veryfast",
-            "ultrafast",
-            "medium",
-            "slow",
-            "slower",
-            "veryslow",
+            "p1",            # fastest (NVENC SDK 10+)
+            "p2",
+            "p3",
+            "p4",            # medium (NVENC SDK 10+)
+            "p5",
+            "p6",
+            "p7",            # best quality (NVENC SDK 10+)
+            "fast",          # shared (x264 + NVENC legacy)
+            "medium",        # shared
+            "slow",          # shared
+            "veryfast",      # x264 only
+            "ultrafast",     # x264 only
+            "slower",        # x264 only
+            "veryslow",      # x264 only
         ],  # Defaults to first item
         "quality (0-51)": (32, 0, 51),
         "pixel format": [
@@ -46,6 +87,13 @@ class VideoWriter(BasePlugin):
         ],
         "Write Frame Index": True,
         "Buffer Size (frames)": 120,
+        # NVENC-specific options (ignored for CPU codecs)
+        "Rate Control": ["auto", "constqp", "vbr", "cbr"],
+        "Bitrate (Mbps)": (0, 0, 100),
+        "GPU Index": (-1, -1, 7),
+        "B-Frames": (0, 0, 4),
+        "Tune": ["none", "hq", "ll", "ull"],
+        "GPU Pixel Conversion": False,
     }
 
     DISPLAY_CONFIG_MAP = {
@@ -54,12 +102,26 @@ class VideoWriter(BasePlugin):
         "pixel format": "pix_fmt",
     }
 
+    # NVENC-specific config keys that should not be passed directly as ffmpeg args
+    _NVENC_CONFIG_KEYS = {
+        "Rate Control", "Bitrate (Mbps)", "GPU Index", "B-Frames", "Tune",
+        "GPU Pixel Conversion",
+    }
+
     def __init__(self, cam_widget, config, queue_size=0):
         super().__init__(cam_widget, config, queue_size)
         self.blocking = True
         self.independent = True
         self.input_params = {}
         self.output_params = {}
+
+        # NVENC-specific settings (extracted before output_params)
+        self.rate_control = "auto"
+        self.bitrate_mbps = 0
+        self.gpu_index = -1
+        self.b_frames = 0
+        self.tune = "none"
+        self.gpu_pixel_conversion = False
 
         for name, value in self.config.items():
             prop_name = VideoWriter.DISPLAY_CONFIG_MAP.get(name)
@@ -84,6 +146,19 @@ class VideoWriter(BasePlugin):
                 self.file_name = slugify(cam_widget.camera.getDisplayName())
                 if len(value)>0:
                     self.file_name += "_" + slugify(value)
+            # Intercept NVENC-specific config keys
+            elif name == "Rate Control":
+                self.rate_control = value
+            elif name == "Bitrate (Mbps)":
+                self.bitrate_mbps = int(value)
+            elif name == "GPU Index":
+                self.gpu_index = int(value)
+            elif name == "B-Frames":
+                self.b_frames = int(value)
+            elif name == "Tune":
+                self.tune = value
+            elif name == "GPU Pixel Conversion":
+                self.gpu_pixel_conversion = bool(value)
             elif (
                 prop_name
                 in [
@@ -103,15 +178,9 @@ class VideoWriter(BasePlugin):
         if vcodec in ["rawvideo"]:
             extension = ".raw"
         elif vcodec in ['h264_nvenc', 'hevc_nvenc']:
-            # Handle unsupported preset for nvidia codecs
-            preset = self.output_params.get("-preset")
-            if preset not in ['slow', 'medium', 'fast', 'llhp', 'llhq']:
-                logger.warning(f"{preset} preset is not supported for vcodec {vcodec} ... defaulting to medium")
-                config.set("speed (preset)", 'medium')
-                self.config["speed (preset)"] = 'medium'
-                self.output_params["-preset"] = 'medium'
-                
-            # self.output_params['-cq'] = self.output_params.pop('-crf')
+            self._configure_nvenc(vcodec, config)
+        elif vcodec in ['libx264', 'libx265']:
+            self._validate_cpu_preset(vcodec)
 
         try:
             if os.access(self.save_dir, os.W_OK):
@@ -130,12 +199,6 @@ class VideoWriter(BasePlugin):
             self.active = False
 
         self.file_path = os.path.join(self.save_dir, self.file_name + extension)
-        # count = 0
-        # while os.path.exists(self.file_path):  # file already exists -> add copy
-        #     count += 1
-        #     self.file_path = os.path.join(
-        #         self.save_dir, self.file_name + f" ({count})" + extension
-        #     )
 
         self.writer = FFMPEG_Writer(
             str(self.file_path),
@@ -143,7 +206,103 @@ class VideoWriter(BasePlugin):
             output_dict=self.output_params,
             verbosity=0,
             buffer_size=getattr(self, 'buffer_size', 120),
+            gpu_pixel_conversion=self.gpu_pixel_conversion and vcodec in ['h264_nvenc', 'hevc_nvenc'],
         )
+
+    def _configure_nvenc(self, vcodec, config):
+        """Configure NVENC-specific ffmpeg parameters with driver version awareness."""
+        preset = self.output_params.get("-preset")
+        driver_version = _get_nvidia_driver_version()
+
+        # --- Preset mapping based on driver version ---
+        if driver_version is not None and driver_version >= 456:
+            # SDK 10+: prefer P1-P7 presets
+            legacy_to_new = {
+                'fast': 'p1', 'medium': 'p4', 'slow': 'p7',
+                'llhp': 'p1', 'llhq': 'p4',
+                'lossless': 'p7', 'losslesshp': 'p1',
+            }
+            valid_new = {'p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7'}
+            if preset in legacy_to_new:
+                new_preset = legacy_to_new[preset]
+                logger.info(f"Mapping legacy NVENC preset '{preset}' to '{new_preset}' (SDK 10+)")
+                self.output_params["-preset"] = new_preset
+            elif preset not in valid_new:
+                logger.warning(f"'{preset}' is not supported for {vcodec}, defaulting to p4")
+                self.output_params["-preset"] = 'p4'
+                config.set("speed (preset)", 'p4')
+                self.config["speed (preset)"] = 'p4'
+
+            # -tune is only supported on SDK 10+
+            if self.tune != "none":
+                self.output_params["-tune"] = self.tune
+        else:
+            # Legacy driver (pre-SDK 10) or nvidia-smi unavailable: use old preset names
+            valid_legacy = {'slow', 'medium', 'fast', 'llhp', 'llhq', 'lossless', 'losslesshp'}
+            new_to_legacy = {
+                'p1': 'fast', 'p2': 'fast', 'p3': 'medium',
+                'p4': 'medium', 'p5': 'slow', 'p6': 'slow', 'p7': 'slow',
+            }
+            if preset in new_to_legacy:
+                old_preset = new_to_legacy[preset]
+                logger.info(f"Legacy NVIDIA driver: mapping preset '{preset}' to '{old_preset}'")
+                self.output_params["-preset"] = old_preset
+            elif preset not in valid_legacy:
+                logger.warning(f"'{preset}' is not supported for {vcodec}, defaulting to medium")
+                self.output_params["-preset"] = 'medium'
+                config.set("speed (preset)", 'medium')
+                self.config["speed (preset)"] = 'medium'
+            # -tune not supported on legacy drivers, skip it
+
+        # --- Rate control ---
+        rc = self.rate_control
+        if rc == "auto":
+            rc = "constqp"
+
+        # NVENC uses -cq instead of -crf for constant quality
+        crf_value = self.output_params.pop("-crf", None)
+
+        if rc == "constqp":
+            self.output_params["-rc"] = "constqp"
+            if crf_value is not None:
+                self.output_params["-cq"] = crf_value
+        elif rc == "vbr":
+            self.output_params["-rc"] = "vbr"
+            if crf_value is not None:
+                self.output_params["-cq"] = crf_value
+            if self.bitrate_mbps > 0:
+                self.output_params["-b:v"] = f"{self.bitrate_mbps}M"
+        elif rc == "cbr":
+            self.output_params["-rc"] = "cbr"
+            if self.bitrate_mbps > 0:
+                self.output_params["-b:v"] = f"{self.bitrate_mbps}M"
+            else:
+                logger.warning("CBR rate control selected but bitrate is 0, defaulting to 8 Mbps")
+                self.output_params["-b:v"] = "8M"
+
+        # --- GPU index ---
+        if self.gpu_index >= 0:
+            self.output_params["-gpu"] = str(self.gpu_index)
+
+        # --- B-Frames ---
+        if self.b_frames > 0:
+            self.output_params["-bf"] = str(self.b_frames)
+
+        # --- Pixel format validation for NVENC ---
+        nvenc_pix_fmts = {'yuv420p', 'nv12', 'p010le', 'yuv444p', 'yuv444p16le'}
+        pix_fmt = self.output_params.get('-pix_fmt', 'yuv420p')
+        if pix_fmt not in nvenc_pix_fmts:
+            logger.warning(f"Pixel format '{pix_fmt}' is not supported by {vcodec}, defaulting to yuv420p")
+            self.output_params['-pix_fmt'] = 'yuv420p'
+
+    def _validate_cpu_preset(self, vcodec):
+        """Validate that an NVENC-only preset isn't used with a CPU codec."""
+        preset = self.output_params.get("-preset")
+        nvenc_only_presets = {'p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7',
+                             'llhp', 'llhq', 'lossless', 'losslesshp'}
+        if preset in nvenc_only_presets:
+            logger.warning(f"'{preset}' is an NVENC preset and not supported for {vcodec}, defaulting to medium")
+            self.output_params["-preset"] = 'medium'
 
     def process(self, frame, metadata):
         self.writer.write_frame(frame)
@@ -179,9 +338,11 @@ class FFMPEG_Writer:
     :param input_dict: dictionary of input parameters to interpret data from Python
     :param output_dict: dictionary of output parameters to encode data to disk
     :param buffer_size: max frames to buffer before backpressure (default 120 ~4s at 30fps)
+    :param gpu_pixel_conversion: if True, use hwupload_cuda filter for GPU-side format conversion
     """
 
-    def __init__(self, file_path, input_dict={}, output_dict={}, verbosity=0, buffer_size=120):
+    def __init__(self, file_path, input_dict={}, output_dict={}, verbosity=0,
+                 buffer_size=120, gpu_pixel_conversion=False):
 
         self.file_path = os.path.abspath(os.path.normpath(file_path))
         dir_path = os.path.dirname(self.file_path)
@@ -194,6 +355,7 @@ class FFMPEG_Writer:
         self.output_dict = output_dict
         self.verbosity = verbosity
         self.initialized = False
+        self.gpu_pixel_conversion = gpu_pixel_conversion
 
         self._FFMPEG_PATH = which("ffmpeg")
 
@@ -246,15 +408,11 @@ class FFMPEG_Writer:
             out_args.append(key)
             out_args.append(value)
 
-        # Explicitly replaces VBR with CBR when using a GPU encoder
-        """
-        vcodec = self.output_dict['-vcodec']
-        if vcodec in ['h264_nvenc', 'hevc_nvenc']:
-            out_args.append('-rc')
-            out_args.append('cbr_hq')
-            out_args.append('-b:v')
-            out_args.append('8M')
-        """
+        # GPU-side pixel format conversion via hwupload_cuda filter
+        vcodec = self.output_dict.get('-vcodec', '')
+        if self.gpu_pixel_conversion and vcodec in ['h264_nvenc', 'hevc_nvenc']:
+            pix_fmt = self.output_dict.get('-pix_fmt', 'yuv420p')
+            out_args = ['-vf', f'format={pix_fmt},hwupload_cuda'] + out_args
 
         cmd = [self._FFMPEG_PATH, "-y", "-f", "rawvideo"] + in_args + ["-i", "-", '-an', '-threads', '0'] + out_args + [self.file_path]
 
