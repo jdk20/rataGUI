@@ -80,7 +80,8 @@ def main():
         ]
         session_settings = launch_config["Session Settings"]
         add_file_logger(os.path.join(launch_config["Save Directory"], "logs"))
-    except:
+    except Exception as err:
+        logger.exception(err)
         logger.error("Unable to launch RataGUI due to incomplete launch_config")
         return
 

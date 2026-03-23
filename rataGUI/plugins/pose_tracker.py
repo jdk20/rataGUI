@@ -118,7 +118,7 @@
 #     if len(model_file) > 1:
 #         raise IOError("Multiple model files found. Model folder should only contain one .pb file")
 #     elif len(model_file) == 0:
-#         raise IOError("Could not fild frozen model (.pb) file in specified folder")
+#         raise IOError("Could not find frozen model (.pb) file in specified folder")
 #     else:
 #         model_file = model_file[0]
 

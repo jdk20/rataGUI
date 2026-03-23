@@ -21,7 +21,7 @@ if enabled_plugins is not None and launch_config.get("Don't show again"):
             logger.info(f"Loaded plugin module: {module_name}.py")
         except ImportError as err:
             logger.warning(f"Unable to load plugin module: {module_name}.py")
-            logger.error(err.msg)
+            logger.error(str(err))
         except Exception as err:
             logger.exception(err)
 
@@ -38,6 +38,6 @@ else:  # Load all modules if launch config requires a start menu
                 logger.info(f"Loaded plugin module: {fname}")
             except ImportError as err:
                 logger.warning(f"Unable to load plugin module: {fname}")
-                logger.error(err.msg)
+                logger.error(str(err))
             except Exception as err:
                 logger.exception(err)

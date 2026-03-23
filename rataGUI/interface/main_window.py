@@ -663,31 +663,40 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
     def save_settings(self, save_dir):
         os.makedirs(save_dir, exist_ok=True)
 
-        with open(os.path.join(save_dir, "camera_settings.json"), "w+") as file:
-            cam_settings = {}
-            contents = file.read()
-            if len(contents) != 0:
-                cam_settings = json.loads(contents)
-            for camID, config in self.camera_configs.items():
-                cam_settings[camID] = config.as_dict()
+        cam_settings_path = os.path.join(save_dir, "camera_settings.json")
+        cam_settings = {}
+        if os.path.isfile(cam_settings_path):
+            with open(cam_settings_path, "r") as file:
+                contents = file.read()
+                if len(contents) != 0:
+                    cam_settings = json.loads(contents)
+        for camID, config in self.camera_configs.items():
+            cam_settings[camID] = config.as_dict()
+        with open(cam_settings_path, "w") as file:
             json.dump(cam_settings, file, indent=2)
 
-        with open(os.path.join(save_dir, "plugin_settings.json"), "w+") as file:
-            plugin_settings = {}
-            contents = file.read()
-            if len(contents) != 0:
-                plugin_settings = json.loads(contents)
-            for name, config in self.plugin_configs.items():
-                plugin_settings[name] = config.as_dict()
+        plugin_settings_path = os.path.join(save_dir, "plugin_settings.json")
+        plugin_settings = {}
+        if os.path.isfile(plugin_settings_path):
+            with open(plugin_settings_path, "r") as file:
+                contents = file.read()
+                if len(contents) != 0:
+                    plugin_settings = json.loads(contents)
+        for name, config in self.plugin_configs.items():
+            plugin_settings[name] = config.as_dict()
+        with open(plugin_settings_path, "w") as file:
             json.dump(plugin_settings, file, indent=2)
 
-        with open(os.path.join(save_dir, "trigger_settings.json"), "w+") as file:
-            trigger_settings = {}
-            contents = file.read()
-            if len(contents) != 0:
-                trigger_settings = json.loads(contents)
-            for deviceID, config in self.trigger_configs.items():
-                trigger_settings[deviceID] = config.as_dict()
+        trigger_settings_path = os.path.join(save_dir, "trigger_settings.json")
+        trigger_settings = {}
+        if os.path.isfile(trigger_settings_path):
+            with open(trigger_settings_path, "r") as file:
+                contents = file.read()
+                if len(contents) != 0:
+                    trigger_settings = json.loads(contents)
+        for deviceID, config in self.trigger_configs.items():
+            trigger_settings[deviceID] = config.as_dict()
+        with open(trigger_settings_path, "w") as file:
             json.dump(trigger_settings, file, indent=2)
 
         ui_settings = {}
@@ -734,11 +743,12 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                 if camID in saved_configs.keys():
                     try:
                         config.set_many(saved_configs[camID])
-                    except:
+                    except Exception as err:
                         logger.warning(
                             f"Some saved settings for camera: {camID} could not be restored \
                                         as it no longer exists in the camera's DEFAULT_PROPS"
-                        )  # TODO: Catch error when saved setting is not in config
+                        )
+                        logger.debug(err)
             logger.info("Restored saved camera settings")
         else:
             logger.info("No saved camera settings ... using defaults")
@@ -754,11 +764,12 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                 if name in saved_configs.keys():
                     try:
                         config.set_many(saved_configs[name])
-                    except:
+                    except Exception as err:
                         logger.warning(
                             f"Some saved settings for plugin: {name} could not be restored \
                                         as it no longer exists in the plugin's DEFAULT_CONFIG"
                         )
+                        logger.debug(err)
             logger.info(f"Restored saved plugin settings")
         else:
             logger.info("No saved plugin settings ... using defaults")

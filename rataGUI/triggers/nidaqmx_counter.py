@@ -51,7 +51,7 @@ class NIDAQmxCounter(BaseTrigger):
         return True
 
     def execute(self, signal):
-        logger.warning("NIDAQmxCounter execute funciton should not be called")
+        logger.warning("NIDAQmxCounter execute function should not be called")
 
     def close(self):
         logger.info("NIDAQmxCounter stopped")

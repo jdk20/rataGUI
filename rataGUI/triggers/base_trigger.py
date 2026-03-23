@@ -36,6 +36,7 @@ class BaseTrigger(ABC):
 
     def __init__(self, deviceID):
         self.initialized = False
+        self.active = False
         self.deviceID = deviceID
 
     def initialize(self, config: ConfigManager) -> bool:

@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 try:
     import tensorflow as tf
-except:
+except ImportError:
     logger.error("Unable to import tensorflow. Check installation process")
 
 
@@ -89,7 +89,7 @@ class DLCInference(BasePlugin):
                 file_name += ".csv"
 
             self.file_path = os.path.join(cam_widget.save_dir, file_name)
-            self.save_file = open(file_name, "w")
+            self.save_file = open(self.file_path, "w")
             self.csv_writer = csv.writer(self.save_file)
 
         self.socket_trigger = None
@@ -195,10 +195,10 @@ class DLCInference(BasePlugin):
                     )
 
         if self.csv_writer is not None:
-            self.csv_writer.writerow(self.poses)
+            self.csv_writer.writerow(self.pose)
 
         if self.socket_trigger is not None:
-            self.socket_trigger.execute(str(self.poses))
+            self.socket_trigger.execute(str(self.pose))
 
         metadata["DLC Poses"] = [self.pose]
 
@@ -220,7 +220,7 @@ def load_frozen_model(model_dir):
             "Multiple model files found. Model folder should only contain one .pb file"
         )
     elif len(model_file) == 0:
-        raise IOError("Could not fild frozen model (.pb) file in specified folder")
+        raise IOError("Could not find frozen model (.pb) file in specified folder")
     else:
         model_file = model_file[0]
 
