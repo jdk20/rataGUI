@@ -23,12 +23,26 @@ python -m pip install rataGUI
 
 ## Pip Installation (CPU-only)
 
-If you don't want to download Anaconda or its lightweight variants (miniconda, miniforge etc.), you can install RataGUI as a standalone pip package in any python>=3.10 environment. However, creating a separate virtual environment is strongly suggested so that RataGUI doesn't conflict with other installed packages. 
+If you don't want to download Anaconda or its lightweight variants (miniconda, miniforge etc.), you can install RataGUI as a standalone pip package in any python>=3.10 environment. However, creating a separate virtual environment is strongly suggested so that RataGUI doesn't conflict with other installed packages.
 > Note: Unlike conda, pip can't automatically install ffmpeg for video encoding so it needs to be installed through the official download [links](https://ffmpeg.org/download.html) or using a package manager (e.g. `sudo apt install ffmpeg` on Debian/Ubuntu, `brew install ffmpeg` on macOS, etc.).
 
 ```
 python -m pip install rataGUI
 ```
+
+## Development Install (from source)
+
+To install from a cloned GitHub repository for development, use an editable install. This lets you modify the source code and see changes immediately without reinstalling.
+
+```
+git clone https://github.com/<YOUR-USERNAME>/rataGUI.git
+cd rataGUI
+conda create -n rataGUI ffmpeg pip python=3.10
+conda activate rataGUI
+python -m pip install -e ".[test]"
+```
+
+> Note: The `-e` flag installs in editable mode, so the package links to your local source tree instead of copying files into `site-packages`. The `[test]` extra installs pytest for running the test suite.
 
 ## External Hardware
 
@@ -52,8 +66,8 @@ python -m pip install nidaqmx
 ```
 
 ## Running Tests
-RataGUI includes a unit test suite that can be run without any hardware connected. Install the test dependencies and run:
+RataGUI includes a unit test suite that can be run without any hardware connected. If you used the development install above, pytest is already included. Otherwise, install it first:
 ```
-pip install pytest
+python -m pip install "rataGUI[test]"
 pytest
 ```
