@@ -38,3 +38,8 @@ rataGUI = "rataGUI.main:main"
 
 [project.urls]
 "Homepage" = "https://github.com/BrainHu42/rataGUI"
+
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
