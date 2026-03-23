@@ -55,6 +55,8 @@ class VideoWriter(BasePlugin):
 
     def __init__(self, cam_widget, config, queue_size=0):
         super().__init__(cam_widget, config, queue_size)
+        self.blocking = True
+        self.independent = True
         self.input_params = {}
         self.output_params = {}
 
@@ -157,18 +159,25 @@ class VideoWriter(BasePlugin):
 
 
 import subprocess as sp
+import threading
+import queue
 from shutil import which
 
 
 class FFMPEG_Writer:
     """Write frames using ffmpeg as backend
 
+    Uses an internal bounded queue and dedicated writer thread to decouple
+    frame encoding from the caller, preventing blocking I/O from stalling
+    the plugin pipeline.
+
     :param filename: path to write video file to
     :param input_dict: dictionary of input parameters to interpret data from Python
     :param output_dict: dictionary of output parameters to encode data to disk
+    :param buffer_size: max frames to buffer before backpressure (default 120 ~4s at 30fps)
     """
 
-    def __init__(self, file_path, input_dict={}, output_dict={}, verbosity=0):
+    def __init__(self, file_path, input_dict={}, output_dict={}, verbosity=0, buffer_size=120):
 
         self.file_path = os.path.abspath(os.path.normpath(file_path))
         dir_path = os.path.dirname(self.file_path)
@@ -186,6 +195,25 @@ class FFMPEG_Writer:
 
         if self._FFMPEG_PATH is None:
             raise IOError("Could not find ffmpeg executable in the environment PATH.")
+
+        self._write_queue = queue.Queue(maxsize=buffer_size)
+        self._write_thread = None
+        self._write_error = None
+
+    def _write_loop(self):
+        """Dedicated thread that drains the write queue to FFMPEG stdin."""
+        try:
+            while True:
+                data = self._write_queue.get()
+                if data is None:  # Sentinel: shutdown
+                    break
+                try:
+                    self._proc.stdin.write(data)
+                except IOError as err:
+                    self._write_error = err
+                    break
+        except Exception as err:
+            self._write_error = err
 
     def start_process(self, H, W, C):
         self.initialized = True
@@ -222,7 +250,7 @@ class FFMPEG_Writer:
             out_args.append('-b:v')
             out_args.append('8M')
         """
-        
+
         cmd = [self._FFMPEG_PATH, "-y", "-f", "rawvideo"] + in_args + ["-i", "-", '-an'] + out_args + [self.file_path]
 
         self._cmd = " ".join(cmd)
@@ -239,6 +267,9 @@ class FFMPEG_Writer:
                 cmd, stdin=sp.PIPE, stdout=sp.DEVNULL, stderr=sp.STDOUT
             )
 
+        self._write_thread = threading.Thread(target=self._write_loop, daemon=True)
+        self._write_thread.start()
+
     def write_frame(self, img_array):
         """Writes one frame to the file."""
 
@@ -247,18 +278,21 @@ class FFMPEG_Writer:
         if not self.initialized:
             self.start_process(H, W, C)
 
-        # print(img_array.dtype)
-        img_array = img_array.astype(np.uint8)
-
-        try:
-            self._proc.stdin.write(img_array.tobytes())
-        except IOError as err:
-            # Show the command and stderr from pipe
-            msg = f"{str(err)}\n\n FFMPEG COMMAND:{self._cmd}\n"
+        if self._write_error is not None:
+            msg = f"{str(self._write_error)}\n\n FFMPEG COMMAND:{self._cmd}\n"
             raise IOError(msg)
 
+        img_array = img_array.astype(np.uint8)
+
+        # Enqueue frame bytes; blocks if buffer is full (backpressure)
+        self._write_queue.put(img_array.tobytes())
+
     def close(self):
-        """Closes the writer and terminates the subprocess if is still alive."""
+        """Closes the writer, flushing all buffered frames before terminating."""
+        if self._write_thread is not None and self._write_thread.is_alive():
+            self._write_queue.put(None)  # Sentinel to stop write loop
+            self._write_thread.join(timeout=30)
+
         if self._proc is None or self._proc.poll() is not None:
             return
 

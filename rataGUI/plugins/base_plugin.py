@@ -33,6 +33,8 @@ class BasePlugin(ABC):
         )
         self.active = True
         self.blocking = False
+        self.independent = False  # Independent plugins can run in parallel via fan-out
+        self.drop_policy = "block"  # "block" or "drop_oldest" when in_queue is full
         self.config = config.as_dict()  # freeze plugin settings
         self.in_queue = Queue(queue_size)
         self.out_queue = None

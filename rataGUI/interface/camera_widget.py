@@ -159,6 +159,16 @@ class CameraWidget(QtWidgets.QWidget, Ui_CameraWidget):
         # Close camera when camera stops streaming
         self.camera.closeCamera()
 
+    async def _put_to_queue(self, target_queue, item, drop_policy="block"):
+        """Put item to a queue, respecting the drop policy."""
+        if drop_policy == "drop_oldest" and target_queue.full():
+            try:
+                target_queue.get_nowait()
+                target_queue.task_done()
+            except asyncio.QueueEmpty:
+                pass
+        await target_queue.put(item)
+
     # Asynchronous execution loop for an arbitrary plugin
     async def plugin_process(self, plugin):
         loop = asyncio.get_running_loop()
@@ -195,25 +205,65 @@ class CameraWidget(QtWidgets.QWidget, Ui_CameraWidget):
             finally:
                 plugin.in_queue.task_done()
 
+    async def fan_out(self, source_queue, target_plugins):
+        """Read from one source queue and distribute to multiple independent plugin queues."""
+        while True:
+            item = await source_queue.get()
+            try:
+                for plugin in target_plugins:
+                    await self._put_to_queue(plugin.in_queue, item, plugin.drop_policy)
+            finally:
+                source_queue.task_done()
+
     async def process_plugin_pipeline(self):
         # Add process to continuously acquire frames from camera
         acquisition_task = asyncio.create_task(self.acquire_frames())
 
-        # Add all plugin processes (pipeline) to async event loop
+        # Split plugins into serial prefix and independent tail group.
+        # Independent plugins at the end of the list run in parallel via fan-out.
+        # Any non-independent plugin breaks the independent group.
+        serial_plugins = list(self.plugins)
+        independent_plugins = []
+
+        # Walk backwards to find the trailing run of independent plugins
+        while serial_plugins and serial_plugins[-1].independent:
+            independent_plugins.insert(0, serial_plugins.pop())
+
+        # Wire serial plugins in chain
         plugin_tasks = []
-        for cur_plugin, next_plugin in zip(self.plugins, self.plugins[1:]):
-            # Connect outputs and inputs of consecutive plugin pairs
+        for cur_plugin, next_plugin in zip(serial_plugins, serial_plugins[1:]):
             cur_plugin.out_queue = next_plugin.in_queue
             plugin_tasks.append(asyncio.create_task(self.plugin_process(cur_plugin)))
-        # Add terminating plugin
-        plugin_tasks.append(asyncio.create_task(self.plugin_process(self.plugins[-1])))
+
+        fan_out_queue = None
+        if independent_plugins:
+            fan_out_queue = asyncio.Queue()
+            if serial_plugins:
+                # Last serial plugin fans out to all independent plugins
+                serial_plugins[-1].out_queue = fan_out_queue
+                plugin_tasks.append(asyncio.create_task(self.plugin_process(serial_plugins[-1])))
+            else:
+                # All plugins are independent — acquisition feeds the fan-out queue directly.
+                # Swap in fan_out_queue as the first plugin's in_queue so acquire_frames() feeds it.
+                self.plugins[0].in_queue = fan_out_queue
+
+            plugin_tasks.append(asyncio.create_task(self.fan_out(fan_out_queue, independent_plugins)))
+
+            # Each independent plugin runs as a terminal plugin
+            for plugin in independent_plugins:
+                plugin_tasks.append(asyncio.create_task(self.plugin_process(plugin)))
+        else:
+            # No independent plugins — add terminating serial plugin
+            plugin_tasks.append(asyncio.create_task(self.plugin_process(serial_plugins[-1])))
 
         # Wait until camera stops running
         await acquisition_task
 
-        # Wait for plugins to finish processing
+        # Wait for all plugin queues to drain
         for plugin in self.plugins:
             await plugin.in_queue.join()
+        if fan_out_queue is not None:
+            await fan_out_queue.join()
 
         # Cancel idle plugin processes
         for task in plugin_tasks:
