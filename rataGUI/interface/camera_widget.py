@@ -151,7 +151,7 @@ class CameraWidget(QtWidgets.QWidget, Ui_CameraWidget):
         except Exception as err:
             logger.exception(err)
             logger.error(
-                f"Exception occured acquiring frame from camera: {self.camera.getDisplayName()} ... stopping"
+                f"Exception occurred acquiring frame from camera: {self.camera.getDisplayName()} ... stopping"
             )
             self.stop_camera_pipeline()
 

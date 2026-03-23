@@ -67,7 +67,7 @@ class MetadataWriter(BasePlugin):
                         overlay = value.strftime("%H:%M:%S.%f")
 
                     if abbreviate:
-                        overlay = overlay
+                        overlay = overlay[:-4]
                 else:
                     if abbreviate:
                         name = "".join(

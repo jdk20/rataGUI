@@ -67,7 +67,7 @@ class Pixel2World(BasePlugin):
                 file_name += ".csv"
 
             self.file_path = os.path.join(cam_widget.save_dir, file_name)
-            self.save_file = open(file_name, "w")
+            self.save_file = open(self.file_path, "w")
 
             self.csv_writer = csv.writer(self.save_file)
 
