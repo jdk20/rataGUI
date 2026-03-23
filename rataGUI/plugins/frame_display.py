@@ -26,8 +26,10 @@ class FrameDisplay(BasePlugin):
         "Fixed Interval": 0,
     }
 
-    def __init__(self, cam_widget, config, queue_size=0):
+    def __init__(self, cam_widget, config, queue_size=3):
         super().__init__(cam_widget, config, queue_size)
+        self.independent = True
+        self.drop_policy = "drop_oldest"
 
         self.frame_width = config.get("Frame width")
         self.frame_height = config.get("Frame height")
