@@ -70,10 +70,16 @@ Note: A "session" is a recording session. Every time you press start, it starts 
 
 # Development Guide
 
-RataGUI's modular framework was built for user customizability and integration. We encourage you to [fork](https://guides.github.com/activities/forking/#fork) the package [Github repository](https://github.com/BrainHu42/rataGUI) and add additional modules for your specific use case. Then, run the following command to clone the forked repository to your computer. 
+RataGUI's modular framework was built for user customizability and integration. We encourage you to [fork](https://guides.github.com/activities/forking/#fork) the package [Github repository](https://github.com/BrainHu42/rataGUI) and add additional modules for your specific use case. Then, clone the forked repository and install in editable mode:
 ```
 git clone https://github.com/<YOUR-USERNAME>/rataGUI.git
+cd rataGUI
+conda create -n rataGUI ffmpeg pip python=3.10
+conda activate rataGUI
+python -m pip install -e ".[test]"
 ```
+
+This installs rataGUI in editable mode so that any source changes take effect immediately without reinstalling.
 
 ## Implement Custom Camera Models
 To add another camera model, simply rename and edit the required functions provided in `cameras/TemplateCamera.py` to fit your camera model's specifications. RataGUI will use these functions to find, initialize, read frames from and close the camera. Any configurable camera settings should be specified in the dictionary named `DEFAULT_PROPS`. RataGUI will use these default settings to automatically create a dynamic menu and add it to the user interface. The configured settings will be passed into the `initializeCamera` function.
@@ -85,9 +91,8 @@ To incorporate additional functionality, simply rename and edit the required fun
 To interface with other external devices, simply rename and edit the required functions provided in `triggers/template_trigger.py` to fit your custom use case. RataGUI will use these functions to populate the trigger tab in the user interface with all available devices and their configurable settings. Trigger devices can be controlled through the interface as well as within a plugin process. 
 
 ## Running Tests
-RataGUI includes a comprehensive test suite. To run the tests:
+RataGUI includes a comprehensive test suite. If you used the development install above, pytest is already included. To run the tests:
 ```
-pip install pytest
 pytest
 ```
 
