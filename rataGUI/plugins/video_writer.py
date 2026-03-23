@@ -4,8 +4,10 @@ from rataGUI import launch_config
 from pathlib import Path
 
 import os
+import subprocess as _sp
 import numpy as np
 from datetime import datetime
+from shutil import which as _which
 
 import logging
 
@@ -14,6 +16,9 @@ logger = logging.getLogger(__name__)
 
 # Cached NVIDIA driver version (None = not yet checked, False = unavailable)
 _nvidia_driver_version_cache = None
+
+# NVENC codec names (single source of truth)
+_NVENC_CODECS = ('h264_nvenc', 'hevc_nvenc', 'av1_nvenc')
 
 
 def _get_nvidia_driver_version():
@@ -46,6 +51,76 @@ def _get_nvidia_driver_version():
     return None
 
 
+# Cached set of encoder names available in the ffmpeg binary
+_ffmpeg_encoder_cache = {}
+
+
+def _check_ffmpeg_encoder_available(encoder_name):
+    """Check if a specific encoder is compiled into the ffmpeg binary.
+
+    Runs ``ffmpeg -encoders`` once, caches the full set of encoder names,
+    and returns True/False for the requested encoder.
+    """
+    global _ffmpeg_encoder_cache
+    if _ffmpeg_encoder_cache:  # already populated
+        return encoder_name in _ffmpeg_encoder_cache
+
+    ffmpeg_path = _which("ffmpeg")
+    if ffmpeg_path is None:
+        return False
+
+    try:
+        result = _sp.run(
+            [ffmpeg_path, "-encoders"],
+            capture_output=True, text=True, timeout=10,
+        )
+        if result.returncode == 0:
+            for line in result.stdout.splitlines():
+                parts = line.strip().split()
+                # Format: "V..... libx264  ..." (6-char flags field, then name)
+                if len(parts) >= 2 and len(parts[0]) == 6:
+                    _ffmpeg_encoder_cache[parts[1]] = True
+    except Exception as err:
+        logger.debug(f"Could not query ffmpeg encoders: {err}")
+
+    return encoder_name in _ffmpeg_encoder_cache
+
+
+# Cached CUDA hwaccel availability (None = not checked, True/False = result)
+_ffmpeg_cuda_available_cache = None
+
+
+def _check_ffmpeg_cuda_available():
+    """Check if ffmpeg was compiled with CUDA hwaccel support.
+
+    Runs ``ffmpeg -hwaccels`` and checks for 'cuda' in the output.
+    Result is cached for the process lifetime.
+    """
+    global _ffmpeg_cuda_available_cache
+    if _ffmpeg_cuda_available_cache is not None:
+        return _ffmpeg_cuda_available_cache
+
+    ffmpeg_path = _which("ffmpeg")
+    if ffmpeg_path is None:
+        _ffmpeg_cuda_available_cache = False
+        return False
+
+    try:
+        result = _sp.run(
+            [ffmpeg_path, "-hwaccels"],
+            capture_output=True, text=True, timeout=10,
+        )
+        if result.returncode == 0:
+            hwaccels = result.stdout.lower().split()
+            _ffmpeg_cuda_available_cache = "cuda" in hwaccels
+            return _ffmpeg_cuda_available_cache
+    except Exception as err:
+        logger.debug(f"Could not query ffmpeg hwaccels: {err}")
+
+    _ffmpeg_cuda_available_cache = False
+    return False
+
+
 class VideoWriter(BasePlugin):
     """
     Plugin that writes frames to video file using FFMPEG
@@ -56,7 +131,7 @@ class VideoWriter(BasePlugin):
     DEFAULT_CONFIG = {
         "Save directory": "",  # Defaults to camera widget's save directory
         "filename suffix": "",
-        "vcodec": ["libx264", "libx265", "h264_nvenc", "hevc_nvenc", "rawvideo"],
+        "vcodec": ["libx264", "libx265", "h264_nvenc", "hevc_nvenc", "av1_nvenc", "libsvtav1", "rawvideo"],
         "framerate": 30,
         "speed (preset)": [
             "p1",            # fastest (NVENC SDK 10+)
@@ -178,10 +253,12 @@ class VideoWriter(BasePlugin):
         vcodec = self.output_params.get("-vcodec")
         if vcodec in ["rawvideo"]:
             extension = ".raw"
-        elif vcodec in ['h264_nvenc', 'hevc_nvenc']:
+        elif vcodec in _NVENC_CODECS:
             self._configure_nvenc(vcodec, config)
         elif vcodec in ['libx264', 'libx265']:
             self._validate_cpu_preset(vcodec)
+        elif vcodec == 'libsvtav1':
+            self._configure_svtav1(vcodec)
 
         try:
             if os.access(self.save_dir, os.W_OK):
@@ -207,14 +284,25 @@ class VideoWriter(BasePlugin):
             output_dict=self.output_params,
             verbosity=0,
             buffer_size=getattr(self, 'buffer_size', 120),
-            gpu_pixel_conversion=self.gpu_pixel_conversion and vcodec in ['h264_nvenc', 'hevc_nvenc'],
+            gpu_pixel_conversion=self.gpu_pixel_conversion and vcodec in _NVENC_CODECS,
             use_hwaccel=self._use_hwaccel,
         )
 
     def _configure_nvenc(self, vcodec, config):
         """Configure NVENC-specific ffmpeg parameters with driver version awareness."""
+        # --- Encoder availability check ---
+        if not _check_ffmpeg_encoder_available(vcodec):
+            logger.warning(f"{vcodec} encoder not found in ffmpeg build; encoding may fail")
+
         preset = self.output_params.get("-preset")
         driver_version = _get_nvidia_driver_version()
+
+        # av1_nvenc requires NVENC SDK 12+ (driver >= 520)
+        if vcodec == 'av1_nvenc' and driver_version is not None and driver_version < 520:
+            logger.warning(
+                f"av1_nvenc requires NVIDIA driver >= 520 (detected {driver_version}). "
+                "Encoding may fail."
+            )
 
         # --- Preset mapping based on driver version ---
         if driver_version is not None and driver_version >= 456:
@@ -288,7 +376,10 @@ class VideoWriter(BasePlugin):
 
         # --- B-Frames ---
         if self.b_frames > 0:
-            self.output_params["-bf"] = str(self.b_frames)
+            if vcodec == 'av1_nvenc':
+                logger.warning("av1_nvenc does not support B-frames; ignoring B-Frames setting")
+            else:
+                self.output_params["-bf"] = str(self.b_frames)
 
         # --- Pixel format validation for NVENC ---
         nvenc_pix_fmts = {'yuv420p', 'nv12', 'p010le', 'yuv444p', 'yuv444p16le'}
@@ -299,8 +390,15 @@ class VideoWriter(BasePlugin):
 
         # --- CUDA hardware acceleration ---
         if self.gpu_pixel_conversion:
-            self._use_hwaccel = True
-            logger.info("CUDA hardware acceleration enabled for %s", vcodec)
+            if _check_ffmpeg_cuda_available():
+                self._use_hwaccel = True
+                logger.info("CUDA hardware acceleration enabled for %s", vcodec)
+            else:
+                logger.warning(
+                    "GPU Pixel Conversion requested but ffmpeg was not compiled with CUDA support. "
+                    "Disabling hardware acceleration."
+                )
+                self.gpu_pixel_conversion = False
 
     def _validate_cpu_preset(self, vcodec):
         """Validate that an NVENC-only preset isn't used with a CPU codec."""
@@ -310,6 +408,36 @@ class VideoWriter(BasePlugin):
         if preset in nvenc_only_presets:
             logger.warning(f"'{preset}' is an NVENC preset and not supported for {vcodec}, defaulting to medium")
             self.output_params["-preset"] = 'medium'
+
+    def _configure_svtav1(self, vcodec):
+        """Configure libsvtav1-specific ffmpeg parameters.
+
+        Maps text-based presets to SVT-AV1 numeric presets (0=slowest, 13=fastest).
+        """
+        if not _check_ffmpeg_encoder_available('libsvtav1'):
+            logger.warning("libsvtav1 encoder not found in ffmpeg build; encoding may fail")
+
+        preset = self.output_params.get("-preset")
+        text_to_numeric = {
+            'ultrafast': '12', 'veryfast': '10', 'fast': '8',
+            'medium': '5', 'slow': '3', 'slower': '1', 'veryslow': '0',
+            # NVENC presets mapped to reasonable SVT-AV1 equivalents
+            'p1': '12', 'p2': '10', 'p3': '8', 'p4': '5',
+            'p5': '3', 'p6': '1', 'p7': '0',
+        }
+        if preset in text_to_numeric:
+            mapped = text_to_numeric[preset]
+            logger.info(f"Mapping preset '{preset}' to SVT-AV1 numeric preset {mapped}")
+            self.output_params["-preset"] = mapped
+        elif preset is not None:
+            try:
+                val = int(preset)
+                if not (0 <= val <= 13):
+                    logger.warning(f"SVT-AV1 preset {val} out of range (0-13), defaulting to 5")
+                    self.output_params["-preset"] = '5'
+            except ValueError:
+                logger.warning(f"Unknown preset '{preset}' for libsvtav1, defaulting to 5")
+                self.output_params["-preset"] = '5'
 
     def process(self, frame, metadata):
         self.writer.write_frame(frame)
@@ -418,7 +546,7 @@ class FFMPEG_Writer:
 
         # GPU-side pixel format conversion via hwupload_cuda filter
         vcodec = self.output_dict.get('-vcodec', '')
-        if self.gpu_pixel_conversion and vcodec in ['h264_nvenc', 'hevc_nvenc']:
+        if self.gpu_pixel_conversion and vcodec in _NVENC_CODECS:
             pix_fmt = self.output_dict.get('-pix_fmt', 'yuv420p')
             out_args = ['-vf', f'format={pix_fmt},hwupload_cuda'] + out_args
 
