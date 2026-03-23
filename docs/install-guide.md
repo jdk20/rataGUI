@@ -37,7 +37,13 @@ To install from a cloned GitHub repository for development, use an editable inst
 ```
 git clone https://github.com/<YOUR-USERNAME>/rataGUI.git
 cd rataGUI
+
+# CPU-only
 conda create -n rataGUI ffmpeg pip python=3.10
+
+# Or GPU-enabled (requires NVIDIA GPU with latest drivers)
+conda create -n rataGUI ffmpeg pip python=3.10 cudnn=8.2 cudatoolkit=11.3 nvidia::cuda-nvcc=11.3
+
 conda activate rataGUI
 python -m pip install -e ".[test]"
 ```
