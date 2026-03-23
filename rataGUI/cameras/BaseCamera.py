@@ -83,5 +83,33 @@ class BaseCamera(ABC):
         """
         return {"Frame Index": self.frames_acquired}
 
+    @classmethod
+    def create_and_initialize(cls, camera_id, config_dict, plugin_names):
+        """Factory method for subprocess use.
+
+        Creates a camera instance, builds a mock ConfigManager from a plain
+        dict, and initialises the camera.  Returns the camera instance on
+        success or raises on failure.
+
+        :param camera_id: Camera identifier passed to ``__init__``.
+        :param config_dict: Plain dict of camera settings.
+        :param plugin_names: List of plugin name strings.
+        """
+        from unittest.mock import MagicMock
+
+        camera = cls(camera_id)
+        config = MagicMock()
+        config.as_dict.return_value = dict(config_dict)
+        config.get.side_effect = lambda key, default=None: config_dict.get(key, default)
+        config.set = MagicMock()
+
+        success = camera.initializeCamera(config, plugin_names)
+        if not success:
+            raise IOError(f"Camera {camera_id} failed to initialize")
+
+        camera._running = True
+        camera.frames_acquired = 0
+        return camera
+
     def __str__(self):
         return "Camera ID: {}".format(str(self.cameraID))
