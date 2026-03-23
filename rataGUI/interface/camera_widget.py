@@ -171,11 +171,21 @@ class CameraWidget(QtWidgets.QWidget, Ui_CameraWidget):
         await target_queue.put(item)
 
     # Asynchronous execution loop for an arbitrary plugin
-    async def plugin_process(self, plugin):
+    async def plugin_process(self, plugin, ring_buffer=None):
         loop = asyncio.get_running_loop()
         failures = 0
         while True:
-            frame, metadata = await plugin.in_queue.get()
+            raw_item = await plugin.in_queue.get()
+
+            # Resolve ring buffer slot index to (frame, metadata) for
+            # independent plugins that receive slot indices via fan-out.
+            if ring_buffer is not None and isinstance(raw_item, int):
+                slot_idx = raw_item
+                frame, metadata = ring_buffer.get_view(slot_idx)
+            else:
+                slot_idx = None
+                frame, metadata = raw_item
+
             try:
                 # Execute plugin
                 if plugin.active:
@@ -204,15 +214,32 @@ class CameraWidget(QtWidgets.QWidget, Ui_CameraWidget):
                     plugin.active = False
                     plugin.close()
             finally:
+                if ring_buffer is not None and slot_idx is not None:
+                    ring_buffer.release(slot_idx)
                 plugin.in_queue.task_done()
 
-    async def fan_out(self, source_queue, target_plugins):
-        """Read from one source queue and distribute to multiple independent plugin queues."""
+    async def fan_out(self, source_queue, target_plugins, ring_buffer=None):
+        """Read from one source queue and distribute to multiple independent plugin queues.
+
+        When *ring_buffer* is provided, frames are published into the ring
+        buffer and only the slot index (an int) is enqueued to each plugin,
+        avoiding per-plugin copies of the full frame array.
+        """
         while True:
             item = await source_queue.get()
             try:
-                for plugin in target_plugins:
-                    await self._put_to_queue(plugin.in_queue, item, plugin.drop_policy)
+                if ring_buffer is not None:
+                    frame, metadata = item
+                    slot_idx = ring_buffer.publish(frame, metadata)
+                    for plugin in target_plugins:
+                        await self._put_to_queue(
+                            plugin.in_queue, slot_idx, plugin.drop_policy
+                        )
+                else:
+                    for plugin in target_plugins:
+                        await self._put_to_queue(
+                            plugin.in_queue, item, plugin.drop_policy
+                        )
             finally:
                 source_queue.task_done()
 
@@ -237,8 +264,32 @@ class CameraWidget(QtWidgets.QWidget, Ui_CameraWidget):
             plugin_tasks.append(asyncio.create_task(self.plugin_process(cur_plugin)))
 
         fan_out_queue = None
+        ring_buffer = None
         if independent_plugins:
             fan_out_queue = asyncio.Queue()
+
+            # Create ring buffer for zero-copy fan-out to independent plugins.
+            # Lazy-initialized on first frame since resolution is unknown here;
+            # FrameRingBuffer.publish() handles reallocation if shape changes.
+            num_slots = max(
+                sum(p.in_queue.maxsize for p in independent_plugins if p.in_queue.maxsize > 0),
+                8,
+            )
+            try:
+                from rataGUI.frame_ring_buffer import FrameRingBuffer
+                ring_buffer = FrameRingBuffer(
+                    num_slots=num_slots,
+                    height=1, width=1, channels=3,  # placeholder; reallocated on first publish
+                    num_consumers=len(independent_plugins),
+                )
+                logger.info(
+                    "Ring buffer enabled for %d independent plugins (%d slots)",
+                    len(independent_plugins), num_slots,
+                )
+            except Exception as err:
+                logger.warning("Ring buffer init failed, falling back to queue fan-out: %s", err)
+                ring_buffer = None
+
             if serial_plugins:
                 # Last serial plugin fans out to all independent plugins
                 serial_plugins[-1].out_queue = fan_out_queue
@@ -248,11 +299,15 @@ class CameraWidget(QtWidgets.QWidget, Ui_CameraWidget):
                 # Swap in fan_out_queue as the first plugin's in_queue so acquire_frames() feeds it.
                 self.plugins[0].in_queue = fan_out_queue
 
-            plugin_tasks.append(asyncio.create_task(self.fan_out(fan_out_queue, independent_plugins)))
+            plugin_tasks.append(
+                asyncio.create_task(self.fan_out(fan_out_queue, independent_plugins, ring_buffer))
+            )
 
             # Each independent plugin runs as a terminal plugin
             for plugin in independent_plugins:
-                plugin_tasks.append(asyncio.create_task(self.plugin_process(plugin)))
+                plugin_tasks.append(
+                    asyncio.create_task(self.plugin_process(plugin, ring_buffer=ring_buffer))
+                )
         else:
             # No independent plugins — add terminating serial plugin
             plugin_tasks.append(asyncio.create_task(self.plugin_process(serial_plugins[-1])))
