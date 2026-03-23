@@ -18,11 +18,11 @@ RataGUI is a **customizable** and **user-friendly** Python framework for real-ti
 # Features
 RataGUI was developed with four primary design principles:
 
-* **Accessibility** - RataGUI features an adaptive and intuitive graphical user interface (GUI) that makes it easier to conduct complex experiments involving heterogenous hardware without any additional programming. Using minimal dependencies and efficient multi-threaded processing, RataGUI is designed to run on a wide variety of different systems.
+* **Accessibility** - RataGUI features an adaptive and intuitive graphical user interface (GUI) that makes it easier to conduct complex experiments involving heterogenous hardware without any additional programming. Using minimal dependencies and efficient multi-threaded and multi-process processing, RataGUI is designed to run on a wide variety of different systems.
 
 * **Modularity** - RataGUI's plug-and-play architecture enables easy customization of data processing pipelines to support your experiment's specific needs. Cameras, plugins and triggers are separated into individual modules (see tables below) and configured together in a single unified interface.
 
-* **Extensitibility** - RataGUI's modular framework allows for seamless integration of user-created modules for additional functionality. You are encouraged to fork the repository and write additional modules using the provided instructions and template code. RataGUI aims to provide a platform for researchers to share code and contribute to the growing list of modules below.
+* **Extensibility** - RataGUI's modular framework allows for seamless integration of user-created modules for additional functionality. You are encouraged to fork the repository and write additional modules using the provided instructions and template code. RataGUI aims to provide a platform for researchers to share code and contribute to the growing list of modules below.
 
 * **Reproducibility** - RataGUI automatically logs all relevant experimental info and saves its state in a restorable, human-readable JSON format. This allows RataGUI to replicate an experiment's parameters from a single session directory. 
 
@@ -42,7 +42,7 @@ RataGUI was developed with four primary design principles:
 | FrameDisplay  | Displays video stream in a separate window | [BrainHu42](https://github.com/BrainHu42) |
 | MetadataWriter | Overlays metadata onto frames and/or into a log file | [BrainHu42](https://github.com/BrainHu42) |
 | SleapInference | Estimates animal poses using exported SLEAP model and writes keypoints as metadata | [BrainHu42](https://github.com/BrainHu42) |
-| VideoWriter | Writes frames to video file using FFMPEG | [BrainHu42](https://github.com/BrainHu42) |
+| VideoWriter | Writes frames to video file using FFMPEG (supports NVENC hardware acceleration) | [BrainHu42](https://github.com/BrainHu42) |
 | Pixel2World | Converts pixel space to real world coordinates using MATLAB camera calibration file | [nathanielnyema](https://github.com/nathanielnyema) |
 | Undistort | Undistorts video stream given camera parameters in MATLAB camera calibration file | [nathanielnyema](https://github.com/nathanielnyema) |
 
@@ -83,6 +83,13 @@ To incorporate additional functionality, simply rename and edit the required fun
 
 ## Implement Custom Triggers
 To interface with other external devices, simply rename and edit the required functions provided in `triggers/template_trigger.py` to fit your custom use case. RataGUI will use these functions to populate the trigger tab in the user interface with all available devices and their configurable settings. Trigger devices can be controlled through the interface as well as within a plugin process. 
+
+## Running Tests
+RataGUI includes a comprehensive test suite. To run the tests:
+```
+pip install pytest
+pytest
+```
 
 ## Contributing
 If you think your module would be useful to other people, please consider submitting a merge request so that we can review and integrate your code into the main branch. We'll also add you to the list of module contributors!

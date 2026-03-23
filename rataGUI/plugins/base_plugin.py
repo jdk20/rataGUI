@@ -43,7 +43,7 @@ class BasePlugin(ABC):
     def process(self, frame: NDArray, metadata: Dict) -> Tuple[NDArray, Dict]:
         raise NotImplementedError("Plugin process function not implemented")
 
-    # Overrite for custom behavior
+    # Override for custom behavior
     def close(self):
         """Deactivates plugin and closes any plugin-specific resources"""
         self.active = False

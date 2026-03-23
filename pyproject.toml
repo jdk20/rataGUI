@@ -40,6 +40,10 @@ rataGUI = "rataGUI.main:main"
 "Homepage" = "https://github.com/BrainHu42/rataGUI"
 
 
+[project.optional-dependencies]
+test = ["pytest>=7.0"]
+
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]

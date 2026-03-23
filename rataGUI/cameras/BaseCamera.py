@@ -7,7 +7,7 @@ from numpy.typing import NDArray
 class BaseCamera(ABC):
     """
     Abstract camera class with generic functions. All camera models should be subclassed
-    to ensure that all the necessary methods are available to the camera acquistion engine.
+    to ensure that all the necessary methods are available to the camera acquisition engine.
     """
 
     # Static variable mapping names of loaded camera modules to their corresponding subclass

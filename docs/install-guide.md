@@ -49,4 +49,11 @@ python -m pip install pypylon
 To use RataGUI with National Instruments hardware, install the python wrapper package for the NI-DAQmx driver.
 ```
 python -m pip install nidaqmx
-``` 
+```
+
+## Running Tests
+RataGUI includes a unit test suite that can be run without any hardware connected. Install the test dependencies and run:
+```
+pip install pytest
+pytest
+```
