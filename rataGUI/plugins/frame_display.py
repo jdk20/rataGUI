@@ -42,31 +42,37 @@ class FrameDisplay(BasePlugin):
 
     def process(self, frame, metadata):
         """Sets pixmap image to video frame"""
-        # Get image dimensions
-        self.interval = max(0,self.interval-1)
-        if self.interval == 0:
-            img_h, img_w, num_ch = frame.shape
-            target_w, target_h = self.frame_width, self.frame_height
-
-            # Downscale with cv2 before creating QImage — faster than Qt scaling
-            # and produces a smaller QImage, reducing memory and QPixmap conversion cost
-            if img_w != target_w or img_h != target_h:
-                if self.config.get("Aspect ratio"):
-                    scale = min(target_w / img_w, target_h / img_h)
-                    new_w = int(img_w * scale)
-                    new_h = int(img_h * scale)
-                else:
-                    new_w, new_h = target_w, target_h
-                frame = cv2.resize(frame, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
+        try:
+            self.interval = max(0, self.interval - 1)
+            if self.interval == 0:
                 img_h, img_w, num_ch = frame.shape
+                target_w, target_h = self.frame_width, self.frame_height
 
-            bytes_per_line = num_ch * img_w
-            qt_image = QtGui.QImage(
-                frame.data, img_w, img_h, bytes_per_line, QtGui.QImage.Format.Format_RGB888
+                # Downscale with cv2 before creating QImage — faster than Qt scaling
+                # and produces a smaller QImage, reducing memory and QPixmap conversion cost
+                if img_w != target_w or img_h != target_h:
+                    if self.config.get("Aspect ratio"):
+                        scale = min(target_w / img_w, target_h / img_h)
+                        new_w = int(img_w * scale)
+                        new_h = int(img_h * scale)
+                    else:
+                        new_w, new_h = target_w, target_h
+                    frame = cv2.resize(frame, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
+                    img_h, img_w, num_ch = frame.shape
+
+                bytes_per_line = num_ch * img_w
+                qt_image = QtGui.QImage(
+                    frame.data, img_w, img_h, bytes_per_line, QtGui.QImage.Format.Format_RGB888
+                )
+
+                self.signal.image.emit(qt_image)
+                self.interval = self.config.get("Fixed Interval")
+        except Exception as err:
+            logger.error(
+                "FrameDisplay.process failed: frame_shape=%s, error=%s",
+                frame.shape if frame is not None else None, err,
             )
-
-            self.signal.image.emit(qt_image)
-            self.interval = self.config.get("Fixed Interval")
+            raise
 
         return frame, metadata
 

@@ -482,11 +482,27 @@ class VideoWriter(BasePlugin):
                 self.output_params["-preset"] = '5'
 
     def process(self, frame, metadata):
-        self.writer.write_frame(frame)
+        try:
+            self.writer.write_frame(frame)
+        except Exception as err:
+            logger.error(
+                "VideoWriter.write_frame failed: frame_index=%s, frame_shape=%s, error=%s",
+                metadata.get('Frame Index', '?'), frame.shape, err,
+            )
+            raise
+
         if self.write_frame_index:
-            fi = metadata['Frame Index'] - 1
-            self.frameindex_file.write(fi.to_bytes(4, byteorder="little"))
-            self.timestamps_file.write(str(metadata["Timestamp"].timestamp()) + '\n')
+            try:
+                fi = metadata['Frame Index'] - 1
+                self.frameindex_file.write(fi.to_bytes(4, byteorder="little"))
+                self.timestamps_file.write(str(metadata["Timestamp"].timestamp()) + '\n')
+            except Exception as err:
+                logger.error(
+                    "VideoWriter failed writing frame index/timestamp: frame_index=%s, error=%s",
+                    metadata.get('Frame Index', '?'), err,
+                )
+                raise
+
         return frame, metadata
 
     def close(self):
@@ -548,6 +564,7 @@ class FFMPEG_Writer:
         self._stderr_thread = None
         self._stderr_lines = deque(maxlen=50)
         self._proc = None
+        self._frame_count = 0
 
     def _stderr_drain(self):
         """Drain stderr into a bounded buffer to prevent pipe deadlock."""
@@ -670,7 +687,12 @@ class FFMPEG_Writer:
         H, W, C = img_array.shape
 
         if not self.initialized:
+            logger.info(
+                "FFMPEG_Writer starting: frame_shape=(%d,%d,%d), file=%s",
+                H, W, C, self.file_path,
+            )
             self.start_process(H, W, C)
+            self._frame_count = 0
 
         if self._write_error is not None:
             stderr_output = self._get_stderr_output()
@@ -684,6 +706,16 @@ class FFMPEG_Writer:
 
         # Enqueue numpy array directly; byte serialization deferred to writer thread
         self._write_queue.put(img_array)
+
+        self._frame_count += 1
+        if self._frame_count % 1000 == 0:
+            qsize = self._write_queue.qsize()
+            proc_alive = self._proc.poll() is None if self._proc else False
+            logger.debug(
+                "FFMPEG_Writer health: frames_written=%d, queue_depth=%d, "
+                "proc_alive=%s, file=%s",
+                self._frame_count, qsize, proc_alive, self.file_path,
+            )
 
     def close(self):
         """Closes the writer, flushing all buffered frames before terminating."""
