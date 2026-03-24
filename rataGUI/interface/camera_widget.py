@@ -64,6 +64,7 @@ class CameraWidget(QtWidgets.QWidget, Ui_CameraWidget):
 
         # Instantiate plugins with camera-specific settings
         self.plugins = []
+        self._acquisition_queue = None  # Set when all plugins are independent (fan-out mode)
         self.plugin_names = []
         self.failed_plugins = {}
         for Plugin, config in plugins:
@@ -248,9 +249,9 @@ class CameraWidget(QtWidgets.QWidget, Ui_CameraWidget):
                     metadata["Average Latency"] = self.avg_latency
 
                     if status:
-                        # print('Camera queue: ' + str(self.plugins[0].in_queue.qsize()))
                         # Send acquired frame to first plugin process in pipeline
-                        await self.plugins[0].in_queue.put((frame, metadata))
+                        target_queue = self._acquisition_queue or self.plugins[0].in_queue
+                        await target_queue.put((frame, metadata))
                         await asyncio.sleep(0)
                     else:
                         raise IOError(
@@ -310,7 +311,8 @@ class CameraWidget(QtWidgets.QWidget, Ui_CameraWidget):
                     # Copy frame from shared memory (subprocess may overwrite slot)
                     frame = self._mp_shm_frames[slot_idx].copy()
 
-                    await self.plugins[0].in_queue.put((frame, metadata))
+                    target_queue = self._acquisition_queue or self.plugins[0].in_queue
+                    await target_queue.put((frame, metadata))
                     await asyncio.sleep(0)
                 else:
                     await asyncio.sleep(0)
@@ -525,8 +527,9 @@ class CameraWidget(QtWidgets.QWidget, Ui_CameraWidget):
                 plugin_tasks.append(asyncio.create_task(self.plugin_process(serial_plugins[-1])))
             else:
                 # All plugins are independent — acquisition feeds the fan-out queue directly.
-                # Swap in fan_out_queue as the first plugin's in_queue so acquire_frames() feeds it.
-                self.plugins[0].in_queue = fan_out_queue
+                # Use a separate acquisition queue so fan_out does not write back
+                # into its own source queue (which would create a circular dependency).
+                self._acquisition_queue = fan_out_queue
 
             plugin_tasks.append(
                 asyncio.create_task(self.fan_out(fan_out_queue, independent_plugins, ring_buffer))
@@ -553,6 +556,8 @@ class CameraWidget(QtWidgets.QWidget, Ui_CameraWidget):
         # Cancel idle plugin processes
         for task in plugin_tasks:
             task.cancel()
+
+        self._acquisition_queue = None
 
     def stop_plugins(self):
         for plugin in self.plugins:
