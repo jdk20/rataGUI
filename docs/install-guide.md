@@ -5,7 +5,7 @@ RataGUI is written entirely in Python and runs on all platforms with minimal dep
 
 ### CPU-only environment
 ```
-conda create -n rataGUI ffmpeg pip python=3.10
+conda create -n rataGUI ffmpeg pip scipy python=3.10
 conda activate rataGUI
 python -m pip install rataGUI
 ```
@@ -16,7 +16,7 @@ For real-time model inference, using a GPU is strongly encouraged to minimize la
 > Note: CUDA is automatically installed in the conda environment.
 
 ```
-conda create -n rataGUI ffmpeg pip python=3.10 cudnn=8.2 cudatoolkit=11.3 nvidia::cuda-nvcc=11.3
+conda create -n rataGUI ffmpeg pip scipy python=3.10 cudnn=8.2 cudatoolkit=11.3 nvidia::cuda-nvcc=11.3
 conda activate rataGUI
 python -m pip install rataGUI
 ```
@@ -39,10 +39,10 @@ git clone https://github.com/<YOUR-USERNAME>/rataGUI.git
 cd rataGUI
 
 # CPU-only
-conda create -n rataGUI ffmpeg pip python=3.10
+conda create -n rataGUI ffmpeg pip scipy python=3.10
 
 # Or GPU-enabled (requires NVIDIA GPU with latest drivers)
-conda create -n rataGUI ffmpeg pip python=3.10 cudnn=8.2 cudatoolkit=11.3 nvidia::cuda-nvcc=11.3
+conda create -n rataGUI ffmpeg pip scipy python=3.10 cudnn=8.2 cudatoolkit=11.3 nvidia::cuda-nvcc=11.3
 
 conda activate rataGUI
 python -m pip install -e ".[test]"
