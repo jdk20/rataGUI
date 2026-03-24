@@ -410,6 +410,11 @@ class CameraWidget(QtWidgets.QWidget, Ui_CameraWidget):
         When *ring_buffer* is provided, frames are published into the ring
         buffer and only the slot index (an int) is enqueued to each plugin,
         avoiding per-plugin copies of the full frame array.
+
+        Blocking plugins receive a copied ``(frame, metadata)`` tuple and
+        their ring-buffer ref-count is released immediately so that slow
+        consumers cannot exhaust ring-buffer slots and stall non-blocking
+        plugins such as the frame display.
         """
         loop = asyncio.get_running_loop()
         while True:
@@ -423,10 +428,22 @@ class CameraWidget(QtWidgets.QWidget, Ui_CameraWidget):
                         None, ring_buffer.publish, frame, metadata
                     )
                     for plugin in target_plugins:
-                        await self._put_to_queue(
-                            plugin.in_queue, slot_idx, plugin.drop_policy,
-                            ring_buffer=ring_buffer,
-                        )
+                        if plugin.blocking:
+                            # Copy frame and release the slot immediately so
+                            # slow blocking plugins do not hold ring-buffer
+                            # slots and starve non-blocking consumers.
+                            view, meta = ring_buffer.get_view(slot_idx)
+                            frame_copy = view.copy()
+                            ring_buffer.release(slot_idx)
+                            await self._put_to_queue(
+                                plugin.in_queue, (frame_copy, meta),
+                                plugin.drop_policy,
+                            )
+                        else:
+                            await self._put_to_queue(
+                                plugin.in_queue, slot_idx, plugin.drop_policy,
+                                ring_buffer=ring_buffer,
+                            )
                 else:
                     for plugin in target_plugins:
                         await self._put_to_queue(
