@@ -121,6 +121,47 @@ def _check_ffmpeg_cuda_available():
     return False
 
 
+# Cached per-codec check for NVENC P-series preset support
+_ffmpeg_nvenc_new_presets_cache = {}
+
+
+def _check_nvenc_new_presets_available(encoder_name='h264_nvenc'):
+    """Check if the ffmpeg binary supports NVENC P-series presets (p1-p7).
+
+    Runs ``ffmpeg -h encoder=<encoder_name>`` and looks for P-series preset
+    names in the output.  Result is cached per encoder name.
+    """
+    if encoder_name in _ffmpeg_nvenc_new_presets_cache:
+        return _ffmpeg_nvenc_new_presets_cache[encoder_name]
+
+    ffmpeg_path = _which("ffmpeg")
+    if ffmpeg_path is None:
+        _ffmpeg_nvenc_new_presets_cache[encoder_name] = False
+        return False
+
+    try:
+        result = _sp.run(
+            [ffmpeg_path, "-h", f"encoder={encoder_name}"],
+            capture_output=True, text=True, timeout=10,
+        )
+        if result.returncode == 0:
+            import re
+            # Look for p1-p7 in the preset option description
+            has_new = bool(re.search(r'\bp[1-7]\b', result.stdout))
+            _ffmpeg_nvenc_new_presets_cache[encoder_name] = has_new
+            if not has_new:
+                logger.info(
+                    "ffmpeg %s does not advertise P-series presets; "
+                    "will use legacy preset names", encoder_name,
+                )
+            return has_new
+    except Exception as err:
+        logger.debug(f"Could not probe {encoder_name} presets: {err}")
+
+    _ffmpeg_nvenc_new_presets_cache[encoder_name] = False
+    return False
+
+
 class VideoWriter(BasePlugin):
     """
     Plugin that writes frames to video file using FFMPEG
@@ -304,8 +345,9 @@ class VideoWriter(BasePlugin):
                 "Encoding may fail."
             )
 
-        # --- Preset mapping based on driver version ---
-        if driver_version is not None and driver_version >= 456:
+        # --- Preset mapping based on driver version AND ffmpeg build ---
+        if (driver_version is not None and driver_version >= 456
+                and _check_nvenc_new_presets_available(vcodec)):
             # SDK 10+: prefer P1-P7 presets
             legacy_to_new = {
                 'fast': 'p1', 'medium': 'p4', 'slow': 'p7',
