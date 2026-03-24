@@ -328,11 +328,19 @@ class CameraWidget(QtWidgets.QWidget, Ui_CameraWidget):
         if elapsed > 0:
             logger.debug("FPS: " + str(self.camera.frames_acquired / elapsed))
 
-    async def _put_to_queue(self, target_queue, item, drop_policy="block"):
-        """Put item to a queue, respecting the drop policy."""
+    async def _put_to_queue(self, target_queue, item, drop_policy="block", ring_buffer=None):
+        """Put item to a queue, respecting the drop policy.
+
+        When *ring_buffer* is provided and the dropped item is a slot index,
+        the slot is released so that the ring buffer does not leak.
+        """
         if drop_policy == "drop_oldest" and target_queue.full():
             try:
-                target_queue.get_nowait()
+                dropped = target_queue.get_nowait()
+                # Release the ring buffer slot for the dropped frame so
+                # that the producer can reuse it.
+                if ring_buffer is not None and isinstance(dropped, int):
+                    ring_buffer.release(dropped)
                 target_queue.task_done()
             except asyncio.QueueEmpty:
                 pass
@@ -350,6 +358,13 @@ class CameraWidget(QtWidgets.QWidget, Ui_CameraWidget):
             if ring_buffer is not None and isinstance(raw_item, int):
                 slot_idx = raw_item
                 frame, metadata = ring_buffer.get_view(slot_idx)
+                # For blocking plugins: copy the frame and release the slot
+                # immediately so the ring buffer is not held during the
+                # (potentially slow) thread-pool execution.
+                if plugin.blocking:
+                    frame = frame.copy()
+                    ring_buffer.release(slot_idx)
+                    slot_idx = None  # prevent double-release in finally
             else:
                 slot_idx = None
                 frame, metadata = raw_item
@@ -367,9 +382,12 @@ class CameraWidget(QtWidgets.QWidget, Ui_CameraWidget):
                     result = (frame, metadata)
 
                 # Send output to next plugin
-                if plugin.out_queue != None:
+                if plugin.out_queue is not None:
                     await plugin.out_queue.put(result)
-                else:
+                elif not plugin.blocking:
+                    # Only measure latency from non-blocking terminal plugins
+                    # (e.g. FrameDisplay) to avoid false spikes from slow
+                    # blocking plugins like VideoWriter.
                     delta_t = datetime.now() - metadata["Timestamp"]
                     self.avg_latency = (
                         delta_t.total_seconds() * 1000 * EXP_AVG_DECAY
@@ -393,15 +411,21 @@ class CameraWidget(QtWidgets.QWidget, Ui_CameraWidget):
         buffer and only the slot index (an int) is enqueued to each plugin,
         avoiding per-plugin copies of the full frame array.
         """
+        loop = asyncio.get_running_loop()
         while True:
             item = await source_queue.get()
             try:
                 if ring_buffer is not None:
                     frame, metadata = item
-                    slot_idx = ring_buffer.publish(frame, metadata)
+                    # Run publish in a thread to avoid blocking the event loop
+                    # when the ring buffer is full (backpressure).
+                    slot_idx = await loop.run_in_executor(
+                        None, ring_buffer.publish, frame, metadata
+                    )
                     for plugin in target_plugins:
                         await self._put_to_queue(
-                            plugin.in_queue, slot_idx, plugin.drop_policy
+                            plugin.in_queue, slot_idx, plugin.drop_policy,
+                            ring_buffer=ring_buffer,
                         )
                 else:
                     for plugin in target_plugins:
