@@ -459,6 +459,8 @@ class VideoWriter(BasePlugin):
 import subprocess as sp
 import threading
 import queue
+import time
+from collections import deque
 from shutil import which
 
 
@@ -501,6 +503,24 @@ class FFMPEG_Writer:
         self._write_queue = queue.Queue(maxsize=buffer_size)
         self._write_thread = None
         self._write_error = None
+        self._stderr_thread = None
+        self._stderr_lines = deque(maxlen=50)
+        self._proc = None
+
+    def _stderr_drain(self):
+        """Drain stderr into a bounded buffer to prevent pipe deadlock."""
+        try:
+            for line in self._proc.stderr:
+                text = line.decode('utf-8', errors='replace').rstrip()
+                self._stderr_lines.append(text)
+                if text:
+                    logger.debug("ffmpeg stderr: %s", text)
+        except Exception:
+            pass
+
+    def _get_stderr_output(self):
+        """Return captured stderr lines as a single string."""
+        return "\n".join(self._stderr_lines)
 
     def _write_loop(self):
         """Dedicated thread that drains the write queue to FFMPEG stdin."""
@@ -513,7 +533,13 @@ class FFMPEG_Writer:
                     # Write numpy buffer directly via memoryview — zero-copy to pipe
                     self._proc.stdin.write(memoryview(data))
                 except IOError as err:
-                    self._write_error = err
+                    stderr_msg = self._get_stderr_output()
+                    if stderr_msg:
+                        self._write_error = IOError(
+                            f"{err}\nFFMPEG stderr:\n{stderr_msg}"
+                        )
+                    else:
+                        self._write_error = err
                     break
         except Exception as err:
             self._write_error = err
@@ -566,18 +592,35 @@ class FFMPEG_Writer:
 
         if self.verbosity >= 2:
             logger.info(cmd)
-            self._proc = sp.Popen(cmd, stdin=sp.PIPE, stdout=sp.PIPE, stderr=None, bufsize=pipe_bufsize)
+            self._proc = sp.Popen(cmd, stdin=sp.PIPE, stdout=sp.PIPE, stderr=sp.PIPE, bufsize=pipe_bufsize)
         elif self.verbosity == 1:
             cmd += ["-v", "warning"]
             logger.info(cmd)
-            self._proc = sp.Popen(cmd, stdin=sp.PIPE, stdout=sp.PIPE, stderr=None, bufsize=pipe_bufsize)
+            self._proc = sp.Popen(cmd, stdin=sp.PIPE, stdout=sp.PIPE, stderr=sp.PIPE, bufsize=pipe_bufsize)
         else:
+            cmd += ["-v", "error"]
             self._proc = sp.Popen(
-                cmd, stdin=sp.PIPE, stdout=sp.DEVNULL, stderr=sp.STDOUT, bufsize=pipe_bufsize
+                cmd, stdin=sp.PIPE, stdout=sp.DEVNULL, stderr=sp.PIPE, bufsize=pipe_bufsize
             )
+
+        # Drain stderr in a background thread to prevent pipe buffer deadlock
+        self._stderr_thread = threading.Thread(target=self._stderr_drain, daemon=True)
+        self._stderr_thread.start()
 
         self._write_thread = threading.Thread(target=self._write_loop, daemon=True)
         self._write_thread.start()
+
+        # Brief check: if ffmpeg exits immediately (e.g. missing codec),
+        # raise now with the actual error instead of a cryptic broken pipe later.
+        time.sleep(0.05)
+        if self._proc.poll() is not None:
+            # Give stderr drain thread a moment to capture output
+            self._stderr_thread.join(timeout=1)
+            stderr_output = self._get_stderr_output()
+            raise IOError(
+                f"ffmpeg exited immediately (code {self._proc.returncode}): "
+                f"{stderr_output}\n\nFFMPEG COMMAND: {self._cmd}"
+            )
 
     def write_frame(self, img_array):
         """Writes one frame to the file."""
@@ -588,7 +631,10 @@ class FFMPEG_Writer:
             self.start_process(H, W, C)
 
         if self._write_error is not None:
+            stderr_output = self._get_stderr_output()
             msg = f"{str(self._write_error)}\n\n FFMPEG COMMAND:{self._cmd}\n"
+            if stderr_output:
+                msg += f"\nFFMPEG stderr:\n{stderr_output}\n"
             raise IOError(msg)
 
         # Ensure uint8 C-contiguous layout; no-copy when already correct
@@ -604,12 +650,16 @@ class FFMPEG_Writer:
             self._write_thread.join(timeout=30)
 
         if self._proc is None or self._proc.poll() is not None:
+            if self._stderr_thread is not None:
+                self._stderr_thread.join(timeout=5)
             return
 
         if self._proc.stdin:
             self._proc.stdin.close()
-        if self._proc.stderr:
-            self._proc.stderr.close()
 
         self._proc.wait()
+
+        if self._stderr_thread is not None:
+            self._stderr_thread.join(timeout=5)
+
         self._proc = None
