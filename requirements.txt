@@ -3,6 +3,6 @@ numpy==1.25.*
 opencv-python-headless==4.8.*
 pillow
 pyqtconfig
-pyqt6
+pyqt6==6.4.*
 # tensorflow==2.9.*; sys_platform != 'darwin'
 # tensorflow; sys_platform == 'darwin'    # MacOS uses latest version
