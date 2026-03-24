@@ -129,8 +129,25 @@ class FLIRCamera(BaseCamera):
             cam_list = FLIRCamera.getCameraList()
             self._stream = cam_list.GetBySerial(self.serial_num)
 
-            if not self._stream.IsInitialized():
-                self._stream.Init()
+            # Force a clean camera state regardless of previous session.
+            # If the previous process crashed, the camera may still be
+            # streaming or initialized, which makes property nodes read-only.
+            if self._stream.IsStreaming():
+                logger.warning(
+                    "Camera %s was still streaming (stale session?), stopping acquisition",
+                    self.serial_num,
+                )
+                self._stream.EndAcquisition()
+
+            if self._stream.IsInitialized():
+                logger.warning(
+                    "Camera %s was already initialized, reinitializing for clean state",
+                    self.serial_num,
+                )
+                self._stream.DeInit()
+
+            self._stream.Init()
+            logger.info("Camera %s initialized successfully", self.serial_num)
         except PySpin.SpinnakerException as err:
             logger.exception(err)
             logger.error("PySpin failed to find and initialize camera")
@@ -225,8 +242,21 @@ class FLIRCamera(BaseCamera):
                             node.SetValue(value)
             # Ensure RGB pixel format
             # self._stream.PixelFormat.SetValue(PySpin.PixelFormat_RGB8Packed)
-            self._stream.PixelFormat.SetValue(PySpin.PixelFormat_BayerRG8)
-            self._stream.IspEnable.SetValue(False)
+            if self._stream.PixelFormat.GetAccessMode() == PySpin.RW:
+                self._stream.PixelFormat.SetValue(PySpin.PixelFormat_BayerRG8)
+            else:
+                logger.warning(
+                    "PixelFormat node is not writable for camera %s (access mode: %s)",
+                    self.serial_num, self._stream.PixelFormat.GetAccessMode(),
+                )
+
+            if self._stream.IspEnable.GetAccessMode() == PySpin.RW:
+                self._stream.IspEnable.SetValue(False)
+            else:
+                logger.warning(
+                    "IspEnable node is not writable for camera %s (access mode: %s)",
+                    self.serial_num, self._stream.IspEnable.GetAccessMode(),
+                )
 
         except PySpin.SpinnakerException as err:
             logger.exception(err)
@@ -237,8 +267,10 @@ class FLIRCamera(BaseCamera):
         # print(self._stream.TLStream.StreamBufferHandlingMode.ToString())
         # print(self._stream.AcquisitionMode.ToString())
 
+        logger.info("Camera %s beginning acquisition", self.serial_num)
         self._stream.BeginAcquisition()
         self._running = True
+        logger.info("Camera %s acquisition started", self.serial_num)
 
         return True
 
@@ -298,7 +330,7 @@ class FLIRCamera(BaseCamera):
                     self._stream.EndAcquisition()
 
                 self._stream.DeInit()
-                del self._stream
+                self._stream = None
 
             self._running = False
             return True

@@ -394,9 +394,26 @@ class CameraWidget(QtWidgets.QWidget, Ui_CameraWidget):
                         + self.avg_latency * (1 - EXP_AVG_DECAY)
                     )
             except Exception as err:
-                logger.exception(err)
                 failures += 1
+                logger.error(
+                    "Plugin %s failure #%d: camera=%s, frame_index=%s, "
+                    "frame_shape=%s, error=%s",
+                    type(plugin).__name__,
+                    failures,
+                    self.camera.getDisplayName(),
+                    metadata.get('Frame Index', '?') if metadata else '?',
+                    frame.shape if frame is not None else None,
+                    err,
+                )
+                logger.exception(err)
                 if failures > 5:  # close plugin after 5 failures
+                    logger.error(
+                        "Plugin %s exceeded failure threshold (5), deactivating. "
+                        "Camera: %s, total_frames_acquired: %d",
+                        type(plugin).__name__,
+                        self.camera.getDisplayName(),
+                        self.camera.frames_acquired,
+                    )
                     plugin.active = False
                     plugin.close()
             finally:
