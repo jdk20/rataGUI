@@ -482,6 +482,10 @@ class VideoWriter(BasePlugin):
                 self.output_params["-preset"] = '5'
 
     def process(self, frame, metadata):
+        logger.debug(
+            "VideoWriter.process: frame_index=%s, shape=%s",
+            metadata.get('Frame Index', '?'), frame.shape,
+        )
         try:
             self.writer.write_frame(frame)
         except Exception as err:
@@ -553,7 +557,16 @@ class FFMPEG_Writer:
         self.gpu_pixel_conversion = gpu_pixel_conversion
         self.use_hwaccel = use_hwaccel
 
-        self._FFMPEG_PATH = which("ffmpeg")
+        self._FFMPEG_PATH = _which("ffmpeg")
+
+        # Fallback: on Windows/conda, ffmpeg lives in the env's Library/bin
+        # which is not always on PATH when launched from a GUI shortcut.
+        if self._FFMPEG_PATH is None:
+            import sys
+            _candidate = os.path.join(sys.prefix, "Library", "bin", "ffmpeg.exe")
+            if os.path.isfile(_candidate):
+                self._FFMPEG_PATH = _candidate
+                logger.info("Found ffmpeg via conda env fallback: %s", _candidate)
 
         if self._FFMPEG_PATH is None:
             raise IOError("Could not find ffmpeg executable in the environment PATH.")

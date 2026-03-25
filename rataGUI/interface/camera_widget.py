@@ -360,6 +360,10 @@ class CameraWidget(QtWidgets.QWidget, Ui_CameraWidget):
             if ring_buffer is not None and isinstance(raw_item, int):
                 slot_idx = raw_item
                 frame, metadata = ring_buffer.get_view(slot_idx)
+                logger.debug(
+                    "plugin_process(%s): resolved ring buffer slot %d, blocking=%s",
+                    type(plugin).__name__, raw_item, plugin.blocking,
+                )
                 # For blocking plugins: copy the frame and release the slot
                 # immediately so the ring buffer is not held during the
                 # (potentially slow) thread-pool execution.
@@ -445,6 +449,10 @@ class CameraWidget(QtWidgets.QWidget, Ui_CameraWidget):
                     # when the ring buffer is full (backpressure).
                     slot_idx = await loop.run_in_executor(
                         None, ring_buffer.publish, frame, metadata
+                    )
+                    logger.debug(
+                        "fan_out: published frame to slot %d, distributing to %d plugins",
+                        slot_idx, len(target_plugins),
                     )
                     for plugin in target_plugins:
                         if plugin.blocking:

@@ -47,3 +47,4 @@ test = ["pytest>=7.0"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+asyncio_mode = "auto"

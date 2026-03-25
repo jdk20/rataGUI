@@ -154,6 +154,62 @@ class TestSetNumConsumers:
         assert buf.ref_counts[idx] == 5
 
 
+class TestConcurrentRefCounts:
+    def test_concurrent_release_from_multiple_threads(self):
+        """Multiple threads releasing the same slot must not race."""
+        num_threads = 4
+        buf = FrameRingBuffer(4, 2, 2, 3, num_consumers=num_threads)
+        frame = np.zeros((2, 2, 3), dtype=np.uint8)
+        idx = buf.publish(frame, {})
+        assert buf.ref_counts[idx] == num_threads
+
+        barrier = threading.Barrier(num_threads)
+
+        def release_one():
+            barrier.wait()
+            buf.release(idx)
+
+        threads = [threading.Thread(target=release_one) for _ in range(num_threads)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(timeout=5)
+
+        assert buf.ref_counts[idx] == 0
+
+    def test_publish_blocks_until_all_consumers_release(self):
+        """With a full ring, publish must block until consumers free a slot."""
+        buf = FrameRingBuffer(2, 2, 2, 3, num_consumers=2)
+        frame = np.zeros((2, 2, 3), dtype=np.uint8)
+
+        # Fill both slots
+        buf.publish(frame, {"i": 0})
+        buf.publish(frame, {"i": 1})
+
+        published = threading.Event()
+
+        def delayed_publish():
+            buf.publish(frame, {"i": 2})
+            published.set()
+
+        t = threading.Thread(target=delayed_publish, daemon=True)
+        t.start()
+
+        # Should still be blocked (both slots held by 2 consumers each)
+        time.sleep(0.05)
+        assert not published.is_set()
+
+        # Release slot 0 once — still blocked (ref_count=1)
+        buf.release(0)
+        time.sleep(0.05)
+        assert not published.is_set()
+
+        # Release slot 0 again — now free (ref_count=0), publish should unblock
+        buf.release(0)
+        t.join(timeout=2)
+        assert published.is_set()
+
+
 class TestMetadata:
     def test_metadata_stored_per_slot(self):
         buf = FrameRingBuffer(3, 2, 2, 3, num_consumers=1)

@@ -61,10 +61,19 @@ class FrameDisplay(BasePlugin):
                     img_h, img_w, num_ch = frame.shape
 
                 bytes_per_line = num_ch * img_w
+                # Deep copy so QImage owns its pixel data independently of the
+                # numpy buffer.  Without .copy() the QImage holds a raw pointer
+                # that can dangle when the ring-buffer slot is released or the
+                # numpy array is garbage-collected before the Qt main thread
+                # processes the queued signal — causing a use-after-free crash.
                 qt_image = QtGui.QImage(
                     frame.data, img_w, img_h, bytes_per_line, QtGui.QImage.Format.Format_RGB888
-                )
+                ).copy()
 
+                logger.debug(
+                    "FrameDisplay emitting QImage: %dx%d (%d bytes/line)",
+                    img_w, img_h, bytes_per_line,
+                )
                 self.signal.image.emit(qt_image)
                 self.interval = self.config.get("Fixed Interval")
         except Exception as err:

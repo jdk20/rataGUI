@@ -317,15 +317,16 @@ class TestCheckNvencNewPresetsAvailable:
 
 
 class TestFFMPEGWriter:
-    @patch("rataGUI.plugins.video_writer.which")
+    @patch("rataGUI.plugins.video_writer._which")
     def test_init_finds_ffmpeg(self, mock_which, tmp_path):
         mock_which.return_value = "/usr/bin/ffmpeg"
         writer = FFMPEG_Writer(str(tmp_path / "test.mp4"), input_dict={}, output_dict={})
         assert writer._FFMPEG_PATH == "/usr/bin/ffmpeg"
         assert writer.initialized is False
 
-    @patch("rataGUI.plugins.video_writer.which")
-    def test_init_no_ffmpeg_raises(self, mock_which):
+    @patch("os.path.isfile", return_value=False)
+    @patch("rataGUI.plugins.video_writer._which")
+    def test_init_no_ffmpeg_raises(self, mock_which, mock_isfile):
         mock_which.return_value = None
         with pytest.raises(IOError, match="ffmpeg"):
             FFMPEG_Writer("/tmp/test.mp4", input_dict={}, output_dict={})
@@ -337,6 +338,7 @@ class TestFFMPEGWriter:
 
         with patch("rataGUI.plugins.video_writer.sp") as mock_sp:
             mock_proc = MagicMock()
+            mock_proc.poll.return_value = None  # process still running
             mock_sp.Popen.return_value = mock_proc
             mock_sp.PIPE = -1
             mock_sp.DEVNULL = -2
@@ -355,6 +357,7 @@ class TestFFMPEGWriter:
 
         with patch("rataGUI.plugins.video_writer.sp") as mock_sp:
             mock_proc = MagicMock()
+            mock_proc.poll.return_value = None  # process still running
             mock_sp.Popen.return_value = mock_proc
             mock_sp.PIPE = -1
             mock_sp.DEVNULL = -2
@@ -379,6 +382,7 @@ class TestHwaccelFlags:
 
         with patch("rataGUI.plugins.video_writer.sp") as mock_sp:
             mock_proc = MagicMock()
+            mock_proc.poll.return_value = None  # process still running
             mock_sp.Popen.return_value = mock_proc
             mock_sp.PIPE = -1
             mock_sp.DEVNULL = -2
@@ -402,6 +406,7 @@ class TestHwaccelFlags:
 
         with patch("rataGUI.plugins.video_writer.sp") as mock_sp:
             mock_proc = MagicMock()
+            mock_proc.poll.return_value = None  # process still running
             mock_sp.Popen.return_value = mock_proc
             mock_sp.PIPE = -1
             mock_sp.DEVNULL = -2
@@ -424,6 +429,7 @@ class TestHwaccelFlags:
 
         with patch("rataGUI.plugins.video_writer.sp") as mock_sp:
             mock_proc = MagicMock()
+            mock_proc.poll.return_value = None  # process still running
             mock_sp.Popen.return_value = mock_proc
             mock_sp.PIPE = -1
             mock_sp.DEVNULL = -2
@@ -447,6 +453,7 @@ class TestHwaccelFlags:
 
         with patch("rataGUI.plugins.video_writer.sp") as mock_sp:
             mock_proc = MagicMock()
+            mock_proc.poll.return_value = None  # process still running
             mock_sp.Popen.return_value = mock_proc
             mock_sp.PIPE = -1
             mock_sp.DEVNULL = -2

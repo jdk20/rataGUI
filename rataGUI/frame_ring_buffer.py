@@ -96,6 +96,7 @@ class FrameRingBuffer:
         with self._slot_released:
             self.ref_counts[slot_idx] = max(0, self.ref_counts[slot_idx] - 1)
             if self.ref_counts[slot_idx] == 0:
+                logger.debug("Slot %d fully released, notifying producer", slot_idx)
                 self._slot_released.notify_all()
 
     # -- Configuration -------------------------------------------------------
