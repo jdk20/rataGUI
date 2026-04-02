@@ -41,7 +41,7 @@ rataGUI = "rataGUI.main:main"
 
 
 [project.optional-dependencies]
-test = ["pytest>=7.0"]
+test = ["pytest>=7.0", "pytest-asyncio>=0.21"]
 
 
 [tool.pytest.ini_options]
