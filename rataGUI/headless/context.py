@@ -19,15 +19,19 @@ class HeadlessConfigManager:
     """
 
     def __init__(self, data: dict = None):
+        """Initialize the config manager with an optional starting dict."""
         self._data = dict(data) if data else {}
 
     def get(self, key, default=None):
+        """Return the value for *key*, or *default* if not present."""
         return self._data.get(key, default)
 
     def as_dict(self) -> dict:
+        """Return a shallow copy of the current configuration as a plain dict."""
         return dict(self._data)
 
     def set(self, key, value):
+        """Set a single configuration key to *value*."""
         self._data[key] = value
 
     def set_defaults(self, defaults: dict):
@@ -53,6 +57,7 @@ class HeadlessConfigManager:
                 self._data[key] = value
 
     def set_many(self, d: dict):
+        """Bulk-update configuration from a dict."""
         self._data.update(d)
 
 
@@ -63,8 +68,22 @@ class PipelineContext:
     ``camera``, ``camera_config``, ``save_dir``, ``triggers``, ``camera_type``.
     """
 
-    def __init__(self, camera, camera_config: HeadlessConfigManager,
-                 save_dir: str, triggers: list, session_dir: str = ""):
+    def __init__(
+        self,
+        camera,
+        camera_config: HeadlessConfigManager,
+        save_dir: str,
+        triggers: list,
+        session_dir: str = "",
+    ):
+        """Initialize a lightweight pipeline context for headless operation.
+
+        :param camera: Camera instance to acquire frames from.
+        :param camera_config: HeadlessConfigManager with camera settings.
+        :param save_dir: Directory for this camera's output data.
+        :param triggers: List of initialized trigger objects.
+        :param session_dir: Root session directory containing all camera outputs.
+        """
         self.camera = camera
         self.camera_type = type(camera).__name__
         self.camera_config = camera_config
@@ -140,7 +159,11 @@ class PipelineContext:
             ):
                 shutil.rmtree(self.save_dir)
 
-                sess_dir_list = os.listdir(self.session_dir) if os.path.isdir(self.session_dir) else []
+                sess_dir_list = (
+                    os.listdir(self.session_dir)
+                    if os.path.isdir(self.session_dir)
+                    else []
+                )
                 if len(sess_dir_list) == 0 or (
                     len(sess_dir_list) == 1 and "settings" == sess_dir_list[0]
                 ):

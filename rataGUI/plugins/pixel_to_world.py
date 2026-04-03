@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 class Pixel2World(BasePlugin):
+    """Plugin that transforms pixel coordinates to real-world coordinates using camera calibration."""
 
     DEFAULT_CONFIG = {
         "Calibration Validation Mode": {"Disabled": False, "Enabled": True},
@@ -25,6 +26,7 @@ class Pixel2World(BasePlugin):
     }
 
     def __init__(self, cam_widget, config, queue_size=0):
+        """Initialize the pixel-to-world transform plugin, loading calibration parameters."""
         super().__init__(cam_widget, config, queue_size)
 
         try:
@@ -42,6 +44,8 @@ class Pixel2World(BasePlugin):
             if rad.size == 3:
                 self.dist_coeffs = np.append(self.dist_coeffs, rad[-1])
             tform_sub = np.concatenate((tform[:3, :2], tform[:3, -1, None]), axis=1)
+            # inv_map = inverse of (camera_matrix * extrinsic_transform), allowing
+            # projection from homogeneous pixel coords directly to world XY coords.
             self.inv_map = np.linalg.inv(self.cam_mtx @ tform_sub)
 
         except Exception as err:
@@ -89,6 +93,7 @@ class Pixel2World(BasePlugin):
         self.nrows = config.get("# of Rows")
 
     def process(self, frame, metadata):
+        """Transform pose keypoints from pixel to world coordinates. Returns (frame, metadata)."""
         undistorted = metadata.get("Undistorted")
         _poses = metadata.get("DLC Poses")
 
@@ -155,12 +160,14 @@ class Pixel2World(BasePlugin):
         return frame, metadata
 
     def pixel_to_world(self, points):
+        """Convert pixel coordinates to world coordinates using the calibration matrix."""
         _points = np.concatenate((points, np.ones((points.shape[0], 1))), axis=1)
         world = (self.inv_map @ _points.T).T
         world = world[:, :2] / world[:, -1, None]
         return world
 
     def close(self):
+        """Deactivate the transform plugin and close the CSV writer if open."""
         logger.info("Pixel to world mapper closed")
         if self.save_file:
             self.save_file.close()

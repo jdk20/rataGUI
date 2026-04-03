@@ -8,7 +8,6 @@ Usage::
 
 import argparse
 import json
-import os
 import signal
 import logging
 
@@ -16,6 +15,10 @@ logger = logging.getLogger(__name__)
 
 
 def main():
+    """Parse CLI arguments, load configuration, and run headless pipelines.
+
+    Supports graceful shutdown via SIGINT and SIGTERM.
+    """
     parser = argparse.ArgumentParser(
         description="Run rataGUI pipelines in headless mode (no GUI)",
     )
@@ -51,6 +54,7 @@ def main():
             config = json.load(f)
     else:
         from rataGUI import launch_config
+
         config = dict(launch_config)
 
     if not config:

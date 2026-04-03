@@ -10,8 +10,10 @@ logger = logging.getLogger(__name__)
 
 
 class Undistort(BasePlugin):
+    """Plugin that removes lens distortion using camera calibration parameters."""
 
     def __init__(self, cam_widget, config, queue_size=0):
+        """Initialize the undistort plugin, computing rectification maps from calibration data."""
         super().__init__(cam_widget, config, queue_size)
         logger.debug(str(BasePlugin.modules.keys()))
 
@@ -30,6 +32,9 @@ class Undistort(BasePlugin):
             dist_coeffs = np.concatenate((rad[:2], tan))
             if rad.size == 3:
                 dist_coeffs = np.append(dist_coeffs, rad[-1])
+            # initUndistortRectifyMap precomputes per-pixel (x,y) lookup maps so that
+            # remap() can warp each frame in a single pass without recomputing the
+            # distortion model every time.
             self.map1, self.map2 = cv.initUndistortRectifyMap(
                 cam_mtx, dist_coeffs, None, cam_mtx, (w, h), cv.CV_32FC1
             )
@@ -42,6 +47,7 @@ class Undistort(BasePlugin):
             self.active = False
 
     def process(self, frame, metadata):
+        """Apply lens undistortion to the frame using precomputed maps. Returns (frame, metadata)."""
         frame = cv.remap(frame, self.map1, self.map2, cv.INTER_LINEAR)
         metadata["Undistorted"] = True
         return frame, metadata

@@ -22,6 +22,7 @@ class MetadataWriter(BasePlugin):
     }
 
     def __init__(self, cam_widget, config, queue_size=0):
+        """Initialize the metadata overlay writer with camera-specific settings."""
         super().__init__(cam_widget, config, queue_size)
 
         self.save_dir = cam_widget.save_dir
@@ -35,9 +36,10 @@ class MetadataWriter(BasePlugin):
         except Exception as err:
             logger.exception(err)
 
-        self.file_path = os.path.join(self.save_dir, 'timestamps.csv')
+        self.file_path = os.path.join(self.save_dir, "timestamps.csv")
 
     def process(self, frame, metadata):
+        """Overlay selected metadata fields as text onto the frame. Returns (frame, metadata)."""
 
         img_h, img_w, num_ch = frame.shape
 
@@ -45,18 +47,11 @@ class MetadataWriter(BasePlugin):
         count = 0
 
         # Write to log
-        with open(self.file_path, 'a') as f:
-            f.write(f'{metadata["Frame Index"]},{metadata["Timestamp"].timestamp()}\n')
+        with open(self.file_path, "a") as f:
+            f.write(f"{metadata['Frame Index']},{metadata['Timestamp'].timestamp()}\n")
 
         for name, value in metadata.items():
             key = "Overlay " + name
-
-            # # check if write function was passed with data
-            # if isinstance(value, tuple) and len(value) == 2:
-            #     # don't do anything if 2nd element is not a function
-            #     if callable(value[1]):
-            #         write_function = value[1]
-            #         write_function()
 
             # Check config to determine what to write
             if self.config.get(key):
@@ -78,6 +73,8 @@ class MetadataWriter(BasePlugin):
                 (text_w, text_h), _ = cv2.getTextSize(
                     overlay, cv2.FONT_HERSHEY_SIMPLEX, fontScale=0.7, thickness=2
                 )
+                # Stack text lines from the bottom of the image upward; each line
+                # is offset by (text_h + 5) so successive overlays don't overlap.
                 pos = (5, img_h - 5 - count * (text_h + 5))
                 cv2.rectangle(
                     frame,
@@ -101,5 +98,6 @@ class MetadataWriter(BasePlugin):
         return frame, metadata
 
     def close(self):
+        """Deactivate the metadata writer plugin."""
         logger.info("Metadata writer closed")
         self.active = False

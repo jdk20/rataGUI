@@ -8,6 +8,7 @@ logger = logging.getLogger(__name__)
 
 
 class WebCamera(BaseCamera):
+    """USB/built-in webcam interface using OpenCV's VideoCapture."""
 
     PROPS = {
         "FPS": 30,
@@ -30,16 +31,19 @@ class WebCamera(BaseCamera):
         return cameras
 
     def __init__(self, camIndex):
+        """Initialize a WebCamera for the given device index."""
         super().__init__("Web Camera " + str(camIndex))
         self.cam_index = camIndex
         self.last_frame = None
 
     def initializeCamera(self, prop_config, plugin_names=[]):
+        """Open the webcam stream via OpenCV. Returns True on success."""
         self._stream = cv2.VideoCapture(self.cam_index)
         self._running = True
         return True
 
     def readCamera(self, colorspace="RGB"):
+        """Read the next frame, converting colorspace if specified. Returns (success, frame)."""
         ret, frame = self._stream.read()
         if ret:
             self.frames_acquired += 1
@@ -55,6 +59,7 @@ class WebCamera(BaseCamera):
         return ret, self.last_frame
 
     def closeCamera(self):
+        """Release the OpenCV video capture."""
         try:
             self._stream.release()
             self._running = False
@@ -64,4 +69,5 @@ class WebCamera(BaseCamera):
             return False
 
     def isOpened(self):
+        """Return whether the underlying VideoCapture is opened."""
         return self._running

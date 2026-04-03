@@ -11,29 +11,7 @@ READ_TIMEOUT = 10000  # 10 sec
 
 
 class BaslerCamera(BaseCamera):
-
-    # DEFAULT_PROPS = {
-    #     "Limit Framerate": {"On": True, "Off": False},
-    #     "Framerate": 30,
-    #     "TriggerSource": {"Off": "TriggerMode_Off",
-    #                       "Line 3": PySpin.TriggerSource_Line3, "Line 0": PySpin.TriggerSource_Line0,
-    #                       "Line 1": PySpin.TriggerSource_Line1, "Line 2": PySpin.TriggerSource_Line2,},
-    #                     #   "Software": PySpin.TriggerSource_Software}, # TODO: Add TriggerSoftware.Execute()
-    #     "Buffer Mode": {"OldestFirst": PySpin.StreamBufferHandlingMode_OldestFirst,
-    #                     "NewestOnly": PySpin.StreamBufferHandlingMode_NewestOnly,},
-    #     # ["Line0 Input", "Line0_Output"]: [{}, {}]
-    #     "Line0 Output": {"None": PySpin.LineSource_Off,},
-    #     "Line1 Output": {"None": PySpin.LineSource_Off,},
-    #     "Line2 Output": {"User Output 0": PySpin.LineSource_UserOutput0, "Frame Acquired": PySpin.LineSource_ExposureActive,},
-    #     "Line3 Output": {"None": PySpin.LineSource_Off,},
-    #     # "PixelFormat": {"RGB8": PySpin.PixelFormat_RGB8Packed, "BGR8": PySpin.PixelFormat_BGR8} # TODO: Ensure consistency
-    # }
-
-    # DISPLAY_PROP_MAP = {
-    #     "Limit Framerate": "AcquisitionFrameRateEnable",
-    #     "Framerate": "AcquisitionFrameRate",
-    #     "Buffer Mode": "TLStream.StreamBufferHandlingMode",
-    # }
+    """Basler camera interface using the pypylon SDK."""
 
     _TlFactory = pylon.TlFactory.GetInstance()
 
@@ -45,7 +23,7 @@ class BaslerCamera(BaseCamera):
 
     @staticmethod
     def getAvailableCameras():
-        """Returns list of all available FLIR cameras"""
+        """Returns list of all available Basler cameras"""
         cameras = []
         cam_list = BaslerCamera.getCameraList()
         for cam in cam_list:
@@ -55,6 +33,7 @@ class BaslerCamera(BaseCamera):
         return cameras
 
     def __init__(self, cameraID: str):
+        """Initialize a BaslerCamera wrapper for a given serial number."""
         super().__init__(cameraID)
         self.last_frame = None
         self.frames_dropped = 0
@@ -63,15 +42,9 @@ class BaslerCamera(BaseCamera):
         self.initial_frameID = 0  # on camera transport layer
         self.FPS = -1
 
-    # def configure_custom_settings(self, prop_config, plugin_names):
-    #     ''' Configure plugin-dependent settings when initializing camera '''
-    #     if "VideoWriter" in plugin_names: # Camera is recording
-    #         prop_config.set("Line2 Output", "Frame Acquired")
-    #     else:
-    #         prop_config.set("Line2 Output", "User Output 0")
-
     def initializeCamera(self, prop_config, plugin_names=[]) -> bool:
-        # Reset camera session variables
+        """Open the Basler camera device and start the video stream. Returns True on success."""
+        # Re-initialize instance variables to reset session state between runs
         self.__init__(self.cameraID)
 
         try:
@@ -103,6 +76,7 @@ class BaslerCamera(BaseCamera):
         return True
 
     def readCamera(self):
+        """Read the next frame from the Basler camera. Returns (success, frame)."""
         try:
             grab_data = self._stream.RetrieveResult(
                 READ_TIMEOUT, pylon.TimeoutHandling_ThrowException
@@ -121,11 +95,8 @@ class BaslerCamera(BaseCamera):
             logger.exception(err)
             return False, None
 
-    # def getMetadata(self):
-    #     return {"Camera Index": self.last_index - self.initial_frameID,
-    #             "Frame Index": self.frames_acquired,}
-
     def closeCamera(self):
+        """Stop grabbing and release the camera stream. Returns True on success."""
         try:
             if self._stream is not None:
                 self._stream.StopGrabbing()
@@ -137,4 +108,5 @@ class BaslerCamera(BaseCamera):
             return False
 
     def isOpened(self):
+        """Return whether the camera is currently running."""
         return self._running

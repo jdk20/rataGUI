@@ -11,23 +11,22 @@ method works correctly.
 """
 
 import logging
-import multiprocessing
 
 logger = logging.getLogger(__name__)
 
 
 def camera_acquisition_loop(
-    camera_module_name,   # e.g. "FLIRCamera" — key in BaseCamera.modules
-    camera_id,            # Camera identifier string
-    camera_config_dict,   # Plain dict (serializable) of camera settings
-    plugin_names,         # List of plugin name strings
-    shm_name,             # SharedMemory name for the frame ring buffer
-    shm_shape,            # (num_slots, H, W, C)
-    meta_queue,           # multiprocessing.Queue for (slot_idx, metadata_dict)
-    control_queue,        # multiprocessing.Queue for control signals
-    ready_event,          # multiprocessing.Event — set when camera initialized
-    error_queue,          # multiprocessing.Queue for error reporting
-    log_dir=None,         # Optional: directory path for file logging
+    camera_module_name,  # e.g. "FLIRCamera" — key in BaseCamera.modules
+    camera_id,  # Camera identifier string
+    camera_config_dict,  # Plain dict (serializable) of camera settings
+    plugin_names,  # List of plugin name strings
+    shm_name,  # SharedMemory name for the frame ring buffer
+    shm_shape,  # (num_slots, H, W, C)
+    meta_queue,  # multiprocessing.Queue for (slot_idx, metadata_dict)
+    control_queue,  # multiprocessing.Queue for control signals
+    ready_event,  # multiprocessing.Event — set when camera initialized
+    error_queue,  # multiprocessing.Queue for error reporting
+    log_dir=None,  # Optional: directory path for file logging
 ):
     """Target function for camera acquisition subprocess.
 
@@ -51,13 +50,12 @@ def camera_acquisition_loop(
 
     console = logging.StreamHandler()
     console.setLevel(logging.DEBUG)
-    console.setFormatter(
-        logging.Formatter("%(levelname)-8s %(module)-16s %(message)s")
-    )
+    console.setFormatter(logging.Formatter("%(levelname)-8s %(module)-16s %(message)s"))
     proc_logger.addHandler(console)
 
     if log_dir is not None:
         import os
+
         os.makedirs(log_dir, exist_ok=True)
         file_name = f"camera_{camera_module_name}_{datetime.now().strftime('%Y_%m_%d-%H_%M_%S')}.log"
         fh = logging.FileHandler(os.path.join(log_dir, file_name))
@@ -70,8 +68,11 @@ def camera_acquisition_loop(
         )
         proc_logger.addHandler(fh)
 
-    proc_logger.info("Camera acquisition process starting for %s (ID: %s)",
-                     camera_module_name, camera_id)
+    proc_logger.info(
+        "Camera acquisition process starting for %s (ID: %s)",
+        camera_module_name,
+        camera_id,
+    )
 
     # -- Attach shared memory ------------------------------------------------
     try:
@@ -136,6 +137,7 @@ def camera_acquisition_loop(
 
             if paused:
                 import time
+
                 time.sleep(0.01)
                 continue
 
@@ -159,7 +161,8 @@ def camera_acquisition_loop(
                 # Frame shape doesn't match shared memory — report and skip
                 proc_logger.error(
                     "Frame shape %s does not match shared memory slot shape %s",
-                    frame.shape, frame_ring[slot_idx].shape,
+                    frame.shape,
+                    frame_ring[slot_idx].shape,
                 )
                 continue
 
@@ -171,8 +174,9 @@ def camera_acquisition_loop(
         proc_logger.exception("Acquisition loop error: %s", err)
         error_queue.put(("acquisition_error", repr(err)))
     finally:
-        proc_logger.info("Closing camera %s (frames acquired: %d)",
-                         camera_id, camera.frames_acquired)
+        proc_logger.info(
+            "Closing camera %s (frames acquired: %d)", camera_id, camera.frames_acquired
+        )
         try:
             camera.closeCamera()
         except Exception as err:

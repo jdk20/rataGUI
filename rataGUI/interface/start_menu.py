@@ -21,6 +21,11 @@ logger = logging.getLogger(__name__)
 
 
 class StartMenu(QDialog, Ui_StartMenu):
+    """Configuration dialog shown before launching the main window.
+
+    Allows users to select which camera, plugin, and trigger modules to enable,
+    set the save directory, and optionally restore a previous session.
+    """
 
     def __init__(self, camera_modules=[], plugin_modules=[], trigger_modules=[]):
         super().__init__()
@@ -102,9 +107,11 @@ class StartMenu(QDialog, Ui_StartMenu):
         self.buttonBox.button(QDialogButtonBox.StandardButton.Close).clicked.connect(
             self.load_settings
         )
+        # Closing without saving clears launch_config so main() exits gracefully
         self.closeEvent = lambda event: launch_config.clear()
 
     def load_settings(self, event=None):
+        """Read widget state into launch_config and validate the save directory."""
         save_dir = self.save_directory.text()
         if len(save_dir) == 0:
             save_dir = os.path.abspath("rataGUI_" + datetime.now().strftime("%Y-%m-%d"))
@@ -116,14 +123,14 @@ class StartMenu(QDialog, Ui_StartMenu):
         if os.path.isdir(session_dir):
             session_dir = os.path.abspath(os.path.normpath(session_dir))
         else:
-            logger.warning(f"Session settings not found ... using defaults")
+            logger.warning("Session settings not found ... using defaults")
 
         try:
             os.makedirs(save_dir, exist_ok=True)
             logger.info(f"Saving all session data to {save_dir}")
         except Exception as err:
             logger.exception(err)
-            logger.error(f"Invalid save directory specified")
+            logger.error("Invalid save directory specified")
             raise
 
         launch_config["Enabled Camera Modules"] = [
@@ -143,12 +150,14 @@ class StartMenu(QDialog, Ui_StartMenu):
         launch_config["Don't show again"] = self.dontShowAgain.isChecked()
 
     def save_settings(self):
+        """Persist launch_config to disk so the start menu can be skipped next time."""
         logger.info('Launch settings saved. Run "rataGUI --start-menu" to reconfigure.')
         self.load_settings()
         with open(config_path, "w") as file:
             json.dump(launch_config, file, indent=2)
 
     def open_dir_dialog(self, line_edit):
+        """Open a native directory picker and write the result into *line_edit*."""
         dir_name = QFileDialog.getExistingDirectory(
             self,
             "Select a Directory",
@@ -161,6 +170,7 @@ class StartMenu(QDialog, Ui_StartMenu):
 
 
 def get_checked_names(check_list: QListWidget) -> list:
+    """Return the text of all checked items in *check_list*."""
     checked = []
     for idx in range(check_list.count()):
         item = check_list.item(idx)
@@ -170,4 +180,5 @@ def get_checked_names(check_list: QListWidget) -> list:
 
 
 def module_name(cls):
+    """Extract the leaf module name from a class (e.g. ``'WebCamera'`` from ``'rataGUI.cameras.WebCamera'``)."""
     return cls.__module__.split(".")[-1]

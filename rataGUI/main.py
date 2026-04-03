@@ -11,16 +11,6 @@ parser.add_argument(
     default=False,
 )
 
-# parser.add_argument(
-#     "--reset",
-#     help=(
-#         "Reset session settings back to defaults."
-#     ),
-#     action="store_const",
-#     const=True,
-#     default=False,
-# )
-
 args = parser.parse_args()
 
 if args.start_menu:
@@ -63,7 +53,12 @@ logger = logging.getLogger(__package__)
 
 
 def main():
-    """Starts new instance of RataGUI"""
+    """Launch the RataGUI application.
+
+    Parses CLI arguments, optionally displays the start menu for module
+    selection, then creates and runs the main window with all configured
+    camera, plugin, and trigger modules.
+    """
     logger.info("__________Starting RataGUI__________")
     QApplication.setStyle("Fusion")
     app = QApplication([])

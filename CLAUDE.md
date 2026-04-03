@@ -36,7 +36,7 @@ Tests run headlessly — PyQt6 is mocked in `tests/conftest.py` before any rataG
 
 ### Module Registration Pattern
 
-Cameras, plugins, and triggers all use the same pattern: an abstract base class with `__init_subclass__` that auto-registers subclasses into a `modules` dict. Dynamic loading in each package's `__init__.py` imports modules listed in `launch_config.json` (or all modules if showing the start menu).
+Cameras, plugins, and triggers all use the same pattern: an abstract base class with `__init_subclass__` that auto-registers subclasses into a `modules` dict. Dynamic loading is handled by the shared `rataGUI/_module_loader.py` utility, which each package's `__init__.py` calls with its config key and exclude list. It imports modules listed in `launch_config.json` (or all modules if showing the start menu).
 
 - **Cameras**: Subclass `BaseCamera` (`cameras/BaseCamera.py`). Implement `getAvailableCameras()`, `initializeCamera()`, `readCamera()`, `closeCamera()`.
 - **Plugins**: Subclass `BasePlugin` (`plugins/base_plugin.py`). Implement `process(frame, metadata) -> (frame, metadata)`.
@@ -95,6 +95,12 @@ The `FrameDisplay` plugin is auto-excluded in headless mode. All other plugins w
 - `mock_cam_widget`, `mock_config_manager`, `sample_frame`, `sample_metadata` are shared fixtures
 - Video writer tests reset module-level caches (`_nvidia_driver_version_cache`, etc.) in `setup_method`
 - Async tests use `asyncio_mode = "auto"` (pytest-asyncio)
+
+### Code Style
+
+- Docstrings use Sphinx `:param:` / `:return:` format. Keep them concise — one-line summary, then params if needed.
+- Inline comments explain *why*, not *what*. Add them for non-obvious logic (calibration math, cache strategies, async coordination), not for self-evident code.
+- `MainWindow` helper methods `_camera_id_from_name()`, `_merge_and_save_json()`, `_load_json_if_exists()` exist to avoid duplication — use them instead of inlining the patterns.
 
 ## Git Workflow
 

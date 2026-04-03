@@ -24,8 +24,14 @@ class FrameRingBuffer:
     :param num_consumers: Expected number of concurrent consumers.
     """
 
-    def __init__(self, num_slots: int, height: int, width: int, channels: int,
-                 num_consumers: int = 1):
+    def __init__(
+        self,
+        num_slots: int,
+        height: int,
+        width: int,
+        channels: int,
+        num_consumers: int = 1,
+    ):
         self.num_slots = num_slots
         self.num_consumers = num_consumers
         self._shape = (height, width, channels)
@@ -43,7 +49,11 @@ class FrameRingBuffer:
 
         logger.info(
             "Allocated FrameRingBuffer: %d slots, %dx%dx%d (%d consumers)",
-            num_slots, height, width, channels, num_consumers,
+            num_slots,
+            height,
+            width,
+            channels,
+            num_consumers,
         )
 
     # -- Producer API --------------------------------------------------------
@@ -59,8 +69,11 @@ class FrameRingBuffer:
         # Wait until slot is free (ref_count == 0)
         with self._slot_released:
             while self.ref_counts[slot_idx] > 0:
-                logger.debug("Backpressure on slot %d (ref_count=%d)",
-                             slot_idx, self.ref_counts[slot_idx])
+                logger.debug(
+                    "Backpressure on slot %d (ref_count=%d)",
+                    slot_idx,
+                    self.ref_counts[slot_idx],
+                )
                 self._slot_released.wait()
 
         # Resize buffer lazily if frame shape changed
@@ -83,7 +96,7 @@ class FrameRingBuffer:
         :returns: ``(frame_view, metadata)`` tuple.
         """
         view = self.frames[slot_idx]
-        view = view.view()          # new view object so writeable flag is local
+        view = view.view()  # new view object so writeable flag is local
         view.flags.writeable = False
         return view, self.metadata[slot_idx]
 
@@ -112,7 +125,10 @@ class FrameRingBuffer:
         h, w, c = new_shape
         logger.info(
             "Reallocating FrameRingBuffer: %dx%dx%d -> %dx%dx%d",
-            *self._shape, h, w, c,
+            *self._shape,
+            h,
+            w,
+            c,
         )
         self._shape = (h, w, c)
         self.frames = np.zeros((self.num_slots, h, w, c), dtype=np.uint8)

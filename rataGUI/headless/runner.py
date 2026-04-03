@@ -22,6 +22,8 @@ logger = logging.getLogger(__name__)
 # Shared bounded thread pool for camera I/O and blocking plugin execution.
 thread_pool = ThreadPoolExecutor(max_workers=8)
 
+# Exponential moving average decay factor for smoothing pipeline latency measurements.
+# Higher values weight recent samples more heavily (0.8 = 80% new, 20% old).
 EXP_AVG_DECAY = 0.8
 
 
@@ -127,11 +129,14 @@ class PipelineRunner:
                     triggers.append(trig)
                     logger.info("Trigger %s initialized", device_id)
                 except Exception as err:
-                    logger.exception("Failed to initialize trigger %s: %s", device_id, err)
+                    logger.exception(
+                        "Failed to initialize trigger %s: %s", device_id, err
+                    )
 
         # Resolve enabled plugins (excluding display-only plugins)
         plugin_module_names = [
-            n for n in self._config.get("Enabled Plugin Modules", [])
+            n
+            for n in self._config.get("Enabled Plugin Modules", [])
             if n not in self.EXCLUDED_PLUGINS
         ]
 
@@ -182,8 +187,12 @@ class PipelineRunner:
                     config_dict = pconfig.as_dict()
                     config_dict["Error Message"] = repr(err)
                     ctx.failed_plugins[pcls.__name__] = config_dict
-                    logger.exception("Plugin %s failed to init for camera %s: %s",
-                                     pcls.__name__, display_name, err)
+                    logger.exception(
+                        "Plugin %s failed to init for camera %s: %s",
+                        pcls.__name__,
+                        display_name,
+                        err,
+                    )
 
             if not ctx.plugins:
                 logger.warning("No plugins for camera %s — skipping", display_name)
@@ -233,7 +242,9 @@ class PipelineRunner:
                 try:
                     import_module(f"rataGUI.{kind}.{name}")
                 except Exception as err:
-                    logger.exception("Failed to import rataGUI.%s.%s: %s", kind, name, err)
+                    logger.exception(
+                        "Failed to import rataGUI.%s.%s: %s", kind, name, err
+                    )
 
     # ------------------------------------------------------------------
     # Single-pipeline lifecycle
@@ -251,8 +262,9 @@ class PipelineRunner:
                 try:
                     plugin.close()
                 except Exception as err:
-                    logger.exception("Plugin %s failed to close: %s",
-                                     type(plugin).__name__, err)
+                    logger.exception(
+                        "Plugin %s failed to close: %s", type(plugin).__name__, err
+                    )
             ctx.clean_session_dir()
 
     async def _start_threaded_pipeline(self, ctx):
@@ -276,6 +288,8 @@ class PipelineRunner:
         from rataGUI.camera_process import camera_acquisition_loop
 
         default_h, default_w, default_c = 1080, 1920, 3
+        # Number of ring buffer slots in shared memory for frame handoff
+        # between the camera subprocess and the main process plugin pipeline.
         num_slots = 8
         shm_shape = (num_slots, default_h, default_w, default_c)
         shm_nbytes = int(np.prod(shm_shape))
@@ -310,8 +324,11 @@ class PipelineRunner:
                 daemon=True,
             )
             ctx._mp_process.start()
-            logger.info("Started camera subprocess for %s (PID: %d)",
-                        ctx.camera.getDisplayName(), ctx._mp_process.pid)
+            logger.info(
+                "Started camera subprocess for %s (PID: %d)",
+                ctx.camera.getDisplayName(),
+                ctx._mp_process.pid,
+            )
 
             if not ready_event.wait(timeout=30):
                 if not ctx._mp_error_queue.empty():
@@ -397,6 +414,7 @@ class PipelineRunner:
     def _read_from_mp_queue(self, ctx):
         """Blocking read from multiprocessing metadata queue."""
         import queue as _queue
+
         while ctx.camera._running:
             try:
                 return ctx._mp_meta_queue.get(timeout=0.1)
@@ -444,8 +462,9 @@ class PipelineRunner:
         if elapsed > 0:
             logger.debug("FPS: %s", ctx.camera.frames_acquired / elapsed)
 
-    async def _put_to_queue(self, target_queue, item, drop_policy="block",
-                            ring_buffer=None):
+    async def _put_to_queue(
+        self, target_queue, item, drop_policy="block", ring_buffer=None
+    ):
         """Put item to queue, respecting the drop policy."""
         if drop_policy == "drop_oldest" and target_queue.full():
             try:
@@ -547,12 +566,15 @@ class PipelineRunner:
                             frame_copy = view.copy()
                             ring_buffer.release(slot_idx)
                             await self._put_to_queue(
-                                plugin.in_queue, (frame_copy, meta),
+                                plugin.in_queue,
+                                (frame_copy, meta),
                                 plugin.drop_policy,
                             )
                         else:
                             await self._put_to_queue(
-                                plugin.in_queue, slot_idx, plugin.drop_policy,
+                                plugin.in_queue,
+                                slot_idx,
+                                plugin.drop_policy,
                                 ring_buffer=ring_buffer,
                             )
                 else:
@@ -598,14 +620,18 @@ class PipelineRunner:
             )
             try:
                 from rataGUI.frame_ring_buffer import FrameRingBuffer
+
                 ring_buffer = FrameRingBuffer(
                     num_slots=num_slots,
-                    height=1, width=1, channels=3,
+                    height=1,
+                    width=1,
+                    channels=3,
                     num_consumers=len(independent_plugins),
                 )
                 logger.info(
                     "Ring buffer enabled for %d independent plugins (%d slots)",
-                    len(independent_plugins), num_slots,
+                    len(independent_plugins),
+                    num_slots,
                 )
             except Exception as err:
                 logger.warning(
@@ -616,9 +642,7 @@ class PipelineRunner:
             if serial_plugins:
                 serial_plugins[-1].out_queue = fan_out_queue
                 plugin_tasks.append(
-                    asyncio.create_task(
-                        self._plugin_process(ctx, serial_plugins[-1])
-                    )
+                    asyncio.create_task(self._plugin_process(ctx, serial_plugins[-1]))
                 )
             else:
                 ctx._acquisition_queue = fan_out_queue
@@ -637,9 +661,7 @@ class PipelineRunner:
                 )
         else:
             plugin_tasks.append(
-                asyncio.create_task(
-                    self._plugin_process(ctx, serial_plugins[-1])
-                )
+                asyncio.create_task(self._plugin_process(ctx, serial_plugins[-1]))
             )
 
         await acquisition_task

@@ -19,7 +19,9 @@ def slugify(value, allow_unicode=False):
             .encode("ascii", "ignore")
             .decode("ascii")
         )
+    # Remove all characters that are not word chars, whitespace, or hyphens
     value = re.sub(r"[^\w\s-]", "", value)
+    # Collapse runs of whitespace and/or hyphens into a single hyphen
     return re.sub(r"[-\s]+", "-", value).strip("-_")
 
 
@@ -27,6 +29,13 @@ from PyQt6.QtCore import QRunnable, QObject, pyqtSlot, pyqtSignal
 
 
 class ThreadSignals(QObject):
+    """Qt signals emitted by WorkerThread to communicate results back to the main thread.
+
+    :signal finished: Emitted when the worker function completes (success or failure).
+    :signal error: Emitted with the exception if the worker function raises.
+    :signal result: Emitted with the return value on success.
+    """
+
     finished = pyqtSignal()
     error = pyqtSignal(Exception)
     result = pyqtSignal(object)
@@ -53,9 +62,6 @@ class WorkerThread(QRunnable):
         self.args = args
         self.kwargs = kwargs
         self.signals = ThreadSignals()
-
-        # Add the callback to our kwargs
-        # self.kwargs['progress_callback'] = self.signals.progress
 
     @pyqtSlot()
     def run(self):

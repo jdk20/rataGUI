@@ -18,14 +18,17 @@ class TemplateCamera(BaseCamera):
 
     @staticmethod
     def getAvailableCameras():
+        """Return a list of available template cameras (override in subclass)."""
         # TODO: Return list of camera objects wrapping every available device
         return []
 
     def __init__(self, cameraID):
+        """Initialize a TemplateCamera with the given camera ID."""
         super().__init__(cameraID)
         self.last_frame = None
 
     def initializeCamera(self, prop_config, plugin_names=[]):
+        """Initialize camera hardware and return True on success."""
         cap = cv2.VideoCapture(self.cameraID)
         if cap.isOpened():
             self._running = True
@@ -37,6 +40,7 @@ class TemplateCamera(BaseCamera):
             return False
 
     def readCamera(self, colorspace="RGB"):
+        """Read the next frame. Returns (success, frame)."""
         ret, frame = self._stream.read()
         if ret:
             self.frames_acquired += 1
@@ -50,6 +54,7 @@ class TemplateCamera(BaseCamera):
         return ret, self.last_frame
 
     def closeCamera(self):
+        """Release camera resources."""
         if self._stream is not None:
             self._stream.release()
 

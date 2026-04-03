@@ -1,7 +1,5 @@
 from rataGUI.plugins.base_plugin import BasePlugin
 from rataGUI.utils import slugify
-from rataGUI import launch_config
-from pathlib import Path
 
 import os
 import subprocess as _sp
@@ -14,11 +12,12 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-# Cached NVIDIA driver version (None = not yet checked, False = unavailable)
+# Cached NVIDIA driver version (None = not yet checked, False = unavailable).
+# Caching avoids repeated nvidia-smi subprocess calls on every VideoWriter init.
 _nvidia_driver_version_cache = None
 
 # NVENC codec names (single source of truth)
-_NVENC_CODECS = ('h264_nvenc', 'hevc_nvenc', 'av1_nvenc')
+_NVENC_CODECS = ("h264_nvenc", "hevc_nvenc", "av1_nvenc")
 
 
 def _get_nvidia_driver_version():
@@ -30,19 +29,32 @@ def _get_nvidia_driver_version():
     """
     global _nvidia_driver_version_cache
     if _nvidia_driver_version_cache is not None:
-        return _nvidia_driver_version_cache if _nvidia_driver_version_cache is not False else None
+        return (
+            _nvidia_driver_version_cache
+            if _nvidia_driver_version_cache is not False
+            else None
+        )
 
     import subprocess as sp
+
     try:
         result = sp.run(
-            ["nvidia-smi", "--query-gpu=driver_version", "--format=csv,noheader,nounits"],
-            capture_output=True, text=True, timeout=5,
+            [
+                "nvidia-smi",
+                "--query-gpu=driver_version",
+                "--format=csv,noheader,nounits",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=5,
         )
         if result.returncode == 0 and result.stdout.strip():
             version_str = result.stdout.strip().splitlines()[0]
             major = int(version_str.split(".")[0])
             _nvidia_driver_version_cache = major
-            logger.info(f"Detected NVIDIA driver version: {version_str} (major={major})")
+            logger.info(
+                f"Detected NVIDIA driver version: {version_str} (major={major})"
+            )
             return major
     except Exception as err:
         logger.debug(f"Could not detect NVIDIA driver version: {err}")
@@ -51,7 +63,8 @@ def _get_nvidia_driver_version():
     return None
 
 
-# Cached set of encoder names available in the ffmpeg binary
+# Cached set of encoder names available in the ffmpeg binary.
+# Populated once by running `ffmpeg -encoders` to avoid repeated subprocess calls.
 _ffmpeg_encoder_cache = {}
 
 
@@ -72,7 +85,9 @@ def _check_ffmpeg_encoder_available(encoder_name):
     try:
         result = _sp.run(
             [ffmpeg_path, "-encoders"],
-            capture_output=True, text=True, timeout=10,
+            capture_output=True,
+            text=True,
+            timeout=10,
         )
         if result.returncode == 0:
             for line in result.stdout.splitlines():
@@ -86,7 +101,8 @@ def _check_ffmpeg_encoder_available(encoder_name):
     return encoder_name in _ffmpeg_encoder_cache
 
 
-# Cached CUDA hwaccel availability (None = not checked, True/False = result)
+# Cached CUDA hwaccel availability (None = not checked, True/False = result).
+# Avoids repeated `ffmpeg -hwaccels` subprocess calls.
 _ffmpeg_cuda_available_cache = None
 
 
@@ -108,7 +124,9 @@ def _check_ffmpeg_cuda_available():
     try:
         result = _sp.run(
             [ffmpeg_path, "-hwaccels"],
-            capture_output=True, text=True, timeout=10,
+            capture_output=True,
+            text=True,
+            timeout=10,
         )
         if result.returncode == 0:
             hwaccels = result.stdout.lower().split()
@@ -121,11 +139,12 @@ def _check_ffmpeg_cuda_available():
     return False
 
 
-# Cached per-codec check for NVENC P-series preset support
+# Cached per-codec check for NVENC P-series preset support.
+# Keyed by encoder name; avoids repeated `ffmpeg -h encoder=...` calls.
 _ffmpeg_nvenc_new_presets_cache = {}
 
 
-def _check_nvenc_new_presets_available(encoder_name='h264_nvenc'):
+def _check_nvenc_new_presets_available(encoder_name="h264_nvenc"):
     """Check if the ffmpeg binary supports NVENC P-series presets (p1-p7).
 
     Runs ``ffmpeg -h encoder=<encoder_name>`` and looks for P-series preset
@@ -142,17 +161,21 @@ def _check_nvenc_new_presets_available(encoder_name='h264_nvenc'):
     try:
         result = _sp.run(
             [ffmpeg_path, "-h", f"encoder={encoder_name}"],
-            capture_output=True, text=True, timeout=10,
+            capture_output=True,
+            text=True,
+            timeout=10,
         )
         if result.returncode == 0:
             import re
+
             # Look for p1-p7 in the preset option description
-            has_new = bool(re.search(r'\bp[1-7]\b', result.stdout))
+            has_new = bool(re.search(r"\bp[1-7]\b", result.stdout))
             _ffmpeg_nvenc_new_presets_cache[encoder_name] = has_new
             if not has_new:
                 logger.info(
                     "ffmpeg %s does not advertise P-series presets; "
-                    "will use legacy preset names", encoder_name,
+                    "will use legacy preset names",
+                    encoder_name,
                 )
             return has_new
     except Exception as err:
@@ -172,23 +195,31 @@ class VideoWriter(BasePlugin):
     DEFAULT_CONFIG = {
         "Save directory": "",  # Defaults to camera widget's save directory
         "filename suffix": "",
-        "vcodec": ["libx264", "libx265", "h264_nvenc", "hevc_nvenc", "av1_nvenc", "libsvtav1", "rawvideo"],
+        "vcodec": [
+            "libx264",
+            "libx265",
+            "h264_nvenc",
+            "hevc_nvenc",
+            "av1_nvenc",
+            "libsvtav1",
+            "rawvideo",
+        ],
         "framerate": 30,
         "speed (preset)": [
-            "p1",            # fastest (NVENC SDK 10+)
+            "p1",  # fastest (NVENC SDK 10+)
             "p2",
             "p3",
-            "p4",            # medium (NVENC SDK 10+)
+            "p4",  # medium (NVENC SDK 10+)
             "p5",
             "p6",
-            "p7",            # best quality (NVENC SDK 10+)
-            "fast",          # shared (x264 + NVENC legacy)
-            "medium",        # shared
-            "slow",          # shared
-            "veryfast",      # x264 only
-            "ultrafast",     # x264 only
-            "slower",        # x264 only
-            "veryslow",      # x264 only
+            "p7",  # best quality (NVENC SDK 10+)
+            "fast",  # shared (x264 + NVENC legacy)
+            "medium",  # shared
+            "slow",  # shared
+            "veryfast",  # x264 only
+            "ultrafast",  # x264 only
+            "slower",  # x264 only
+            "veryslow",  # x264 only
         ],  # Defaults to first item
         "quality (0-51)": (32, 0, 51),
         "pixel format": [
@@ -220,11 +251,16 @@ class VideoWriter(BasePlugin):
 
     # NVENC-specific config keys that should not be passed directly as ffmpeg args
     _NVENC_CONFIG_KEYS = {
-        "Rate Control", "Bitrate (Mbps)", "GPU Index", "B-Frames", "Tune",
+        "Rate Control",
+        "Bitrate (Mbps)",
+        "GPU Index",
+        "B-Frames",
+        "Tune",
         "GPU Pixel Conversion",
     }
 
     def __init__(self, cam_widget, config, queue_size=0):
+        """Initialize the video writer, detecting available codecs and configuring ffmpeg settings."""
         super().__init__(cam_widget, config, queue_size)
         self.blocking = True
         self.independent = True
@@ -260,7 +296,7 @@ class VideoWriter(BasePlugin):
                 self.buffer_size = int(value)
             elif prop_name == "filename suffix":
                 self.file_name = slugify(cam_widget.camera.getDisplayName())
-                if len(value)>0:
+                if len(value) > 0:
                     self.file_name += "_" + slugify(value)
             # Intercept NVENC-specific config keys
             elif name == "Rate Control":
@@ -296,9 +332,9 @@ class VideoWriter(BasePlugin):
             extension = ".raw"
         elif vcodec in _NVENC_CODECS:
             self._configure_nvenc(vcodec, config)
-        elif vcodec in ['libx264', 'libx265']:
+        elif vcodec in ["libx264", "libx265"]:
             self._validate_cpu_preset(vcodec)
-        elif vcodec == 'libsvtav1':
+        elif vcodec == "libsvtav1":
             self._configure_svtav1(vcodec)
 
         try:
@@ -307,8 +343,14 @@ class VideoWriter(BasePlugin):
                 self.save_dir = os.path.join(self.save_dir, fld_name)
                 os.makedirs(self.save_dir, exist_ok=True)
                 if self.write_frame_index:
-                    self.frameindex_file = open(os.path.join(self.save_dir, f"frameindex_{self.file_name}"), "wb")
-                    self.timestamps_file = open(os.path.join(self.save_dir, f"timestamps_{self.file_name}.txt"), "w")
+                    self.frameindex_file = open(
+                        os.path.join(self.save_dir, f"frameindex_{self.file_name}"),
+                        "wb",
+                    )
+                    self.timestamps_file = open(
+                        os.path.join(self.save_dir, f"timestamps_{self.file_name}.txt"),
+                        "w",
+                    )
             else:
                 raise OSError(
                     "Inaccessible save directory ... auto-disabling Video Writer plugin"
@@ -324,7 +366,7 @@ class VideoWriter(BasePlugin):
             input_dict=self.input_params,
             output_dict=self.output_params,
             verbosity=0,
-            buffer_size=getattr(self, 'buffer_size', 120),
+            buffer_size=getattr(self, "buffer_size", 120),
             gpu_pixel_conversion=self.gpu_pixel_conversion and vcodec in _NVENC_CODECS,
             use_hwaccel=self._use_hwaccel,
         )
@@ -333,57 +375,91 @@ class VideoWriter(BasePlugin):
         """Configure NVENC-specific ffmpeg parameters with driver version awareness."""
         # --- Encoder availability check ---
         if not _check_ffmpeg_encoder_available(vcodec):
-            logger.warning(f"{vcodec} encoder not found in ffmpeg build; encoding may fail")
+            logger.warning(
+                f"{vcodec} encoder not found in ffmpeg build; encoding may fail"
+            )
 
         preset = self.output_params.get("-preset")
         driver_version = _get_nvidia_driver_version()
 
         # av1_nvenc requires NVENC SDK 12+ (driver >= 520)
-        if vcodec == 'av1_nvenc' and driver_version is not None and driver_version < 520:
+        if (
+            vcodec == "av1_nvenc"
+            and driver_version is not None
+            and driver_version < 520
+        ):
             logger.warning(
                 f"av1_nvenc requires NVIDIA driver >= 520 (detected {driver_version}). "
                 "Encoding may fail."
             )
 
         # --- Preset mapping based on driver version AND ffmpeg build ---
-        if (driver_version is not None and driver_version >= 456
-                and _check_nvenc_new_presets_available(vcodec)):
+        if (
+            driver_version is not None
+            and driver_version >= 456
+            and _check_nvenc_new_presets_available(vcodec)
+        ):
             # SDK 10+: prefer P1-P7 presets
             legacy_to_new = {
-                'fast': 'p1', 'medium': 'p4', 'slow': 'p7',
-                'llhp': 'p1', 'llhq': 'p4',
-                'lossless': 'p7', 'losslesshp': 'p1',
+                "fast": "p1",
+                "medium": "p4",
+                "slow": "p7",
+                "llhp": "p1",
+                "llhq": "p4",
+                "lossless": "p7",
+                "losslesshp": "p1",
             }
-            valid_new = {'p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7'}
+            valid_new = {"p1", "p2", "p3", "p4", "p5", "p6", "p7"}
             if preset in legacy_to_new:
                 new_preset = legacy_to_new[preset]
-                logger.info(f"Mapping legacy NVENC preset '{preset}' to '{new_preset}' (SDK 10+)")
+                logger.info(
+                    f"Mapping legacy NVENC preset '{preset}' to '{new_preset}' (SDK 10+)"
+                )
                 self.output_params["-preset"] = new_preset
             elif preset not in valid_new:
-                logger.warning(f"'{preset}' is not supported for {vcodec}, defaulting to p4")
-                self.output_params["-preset"] = 'p4'
-                config.set("speed (preset)", 'p4')
-                self.config["speed (preset)"] = 'p4'
+                logger.warning(
+                    f"'{preset}' is not supported for {vcodec}, defaulting to p4"
+                )
+                self.output_params["-preset"] = "p4"
+                config.set("speed (preset)", "p4")
+                self.config["speed (preset)"] = "p4"
 
             # -tune is only supported on SDK 10+
             if self.tune != "none":
                 self.output_params["-tune"] = self.tune
         else:
             # Legacy driver (pre-SDK 10) or nvidia-smi unavailable: use old preset names
-            valid_legacy = {'slow', 'medium', 'fast', 'llhp', 'llhq', 'lossless', 'losslesshp'}
+            valid_legacy = {
+                "slow",
+                "medium",
+                "fast",
+                "llhp",
+                "llhq",
+                "lossless",
+                "losslesshp",
+            }
             new_to_legacy = {
-                'p1': 'fast', 'p2': 'fast', 'p3': 'medium',
-                'p4': 'medium', 'p5': 'slow', 'p6': 'slow', 'p7': 'slow',
+                "p1": "fast",
+                "p2": "fast",
+                "p3": "medium",
+                "p4": "medium",
+                "p5": "slow",
+                "p6": "slow",
+                "p7": "slow",
             }
             if preset in new_to_legacy:
                 old_preset = new_to_legacy[preset]
-                logger.info(f"Legacy NVIDIA driver: mapping preset '{preset}' to '{old_preset}'")
+                logger.info(
+                    f"Legacy NVIDIA driver: mapping preset '{preset}' to '{old_preset}'"
+                )
                 self.output_params["-preset"] = old_preset
             elif preset not in valid_legacy:
-                logger.warning(f"'{preset}' is not supported for {vcodec}, defaulting to medium")
-                self.output_params["-preset"] = 'medium'
-                config.set("speed (preset)", 'medium')
-                self.config["speed (preset)"] = 'medium'
+                logger.warning(
+                    f"'{preset}' is not supported for {vcodec}, defaulting to medium"
+                )
+                self.output_params["-preset"] = "medium"
+                config.set("speed (preset)", "medium")
+                self.config["speed (preset)"] = "medium"
             # -tune not supported on legacy drivers, skip it
 
         # --- Rate control ---
@@ -409,7 +485,9 @@ class VideoWriter(BasePlugin):
             if self.bitrate_mbps > 0:
                 self.output_params["-b:v"] = f"{self.bitrate_mbps}M"
             else:
-                logger.warning("CBR rate control selected but bitrate is 0, defaulting to 8 Mbps")
+                logger.warning(
+                    "CBR rate control selected but bitrate is 0, defaulting to 8 Mbps"
+                )
                 self.output_params["-b:v"] = "8M"
 
         # --- GPU index ---
@@ -418,17 +496,21 @@ class VideoWriter(BasePlugin):
 
         # --- B-Frames ---
         if self.b_frames > 0:
-            if vcodec == 'av1_nvenc':
-                logger.warning("av1_nvenc does not support B-frames; ignoring B-Frames setting")
+            if vcodec == "av1_nvenc":
+                logger.warning(
+                    "av1_nvenc does not support B-frames; ignoring B-Frames setting"
+                )
             else:
                 self.output_params["-bf"] = str(self.b_frames)
 
         # --- Pixel format validation for NVENC ---
-        nvenc_pix_fmts = {'yuv420p', 'nv12', 'p010le', 'yuv444p', 'yuv444p16le'}
-        pix_fmt = self.output_params.get('-pix_fmt', 'yuv420p')
+        nvenc_pix_fmts = {"yuv420p", "nv12", "p010le", "yuv444p", "yuv444p16le"}
+        pix_fmt = self.output_params.get("-pix_fmt", "yuv420p")
         if pix_fmt not in nvenc_pix_fmts:
-            logger.warning(f"Pixel format '{pix_fmt}' is not supported by {vcodec}, defaulting to yuv420p")
-            self.output_params['-pix_fmt'] = 'yuv420p'
+            logger.warning(
+                f"Pixel format '{pix_fmt}' is not supported by {vcodec}, defaulting to yuv420p"
+            )
+            self.output_params["-pix_fmt"] = "yuv420p"
 
         # --- CUDA hardware acceleration ---
         if self.gpu_pixel_conversion:
@@ -445,27 +527,52 @@ class VideoWriter(BasePlugin):
     def _validate_cpu_preset(self, vcodec):
         """Validate that an NVENC-only preset isn't used with a CPU codec."""
         preset = self.output_params.get("-preset")
-        nvenc_only_presets = {'p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7',
-                             'llhp', 'llhq', 'lossless', 'losslesshp'}
+        nvenc_only_presets = {
+            "p1",
+            "p2",
+            "p3",
+            "p4",
+            "p5",
+            "p6",
+            "p7",
+            "llhp",
+            "llhq",
+            "lossless",
+            "losslesshp",
+        }
         if preset in nvenc_only_presets:
-            logger.warning(f"'{preset}' is an NVENC preset and not supported for {vcodec}, defaulting to medium")
-            self.output_params["-preset"] = 'medium'
+            logger.warning(
+                f"'{preset}' is an NVENC preset and not supported for {vcodec}, defaulting to medium"
+            )
+            self.output_params["-preset"] = "medium"
 
     def _configure_svtav1(self, vcodec):
         """Configure libsvtav1-specific ffmpeg parameters.
 
         Maps text-based presets to SVT-AV1 numeric presets (0=slowest, 13=fastest).
         """
-        if not _check_ffmpeg_encoder_available('libsvtav1'):
-            logger.warning("libsvtav1 encoder not found in ffmpeg build; encoding may fail")
+        if not _check_ffmpeg_encoder_available("libsvtav1"):
+            logger.warning(
+                "libsvtav1 encoder not found in ffmpeg build; encoding may fail"
+            )
 
         preset = self.output_params.get("-preset")
         text_to_numeric = {
-            'ultrafast': '12', 'veryfast': '10', 'fast': '8',
-            'medium': '5', 'slow': '3', 'slower': '1', 'veryslow': '0',
+            "ultrafast": "12",
+            "veryfast": "10",
+            "fast": "8",
+            "medium": "5",
+            "slow": "3",
+            "slower": "1",
+            "veryslow": "0",
             # NVENC presets mapped to reasonable SVT-AV1 equivalents
-            'p1': '12', 'p2': '10', 'p3': '8', 'p4': '5',
-            'p5': '3', 'p6': '1', 'p7': '0',
+            "p1": "12",
+            "p2": "10",
+            "p3": "8",
+            "p4": "5",
+            "p5": "3",
+            "p6": "1",
+            "p7": "0",
         }
         if preset in text_to_numeric:
             mapped = text_to_numeric[preset]
@@ -475,41 +582,53 @@ class VideoWriter(BasePlugin):
             try:
                 val = int(preset)
                 if not (0 <= val <= 13):
-                    logger.warning(f"SVT-AV1 preset {val} out of range (0-13), defaulting to 5")
-                    self.output_params["-preset"] = '5'
+                    logger.warning(
+                        f"SVT-AV1 preset {val} out of range (0-13), defaulting to 5"
+                    )
+                    self.output_params["-preset"] = "5"
             except ValueError:
-                logger.warning(f"Unknown preset '{preset}' for libsvtav1, defaulting to 5")
-                self.output_params["-preset"] = '5'
+                logger.warning(
+                    f"Unknown preset '{preset}' for libsvtav1, defaulting to 5"
+                )
+                self.output_params["-preset"] = "5"
 
     def process(self, frame, metadata):
+        """Write a frame to the video file, starting the ffmpeg subprocess on the first frame."""
         logger.debug(
             "VideoWriter.process: frame_index=%s, shape=%s",
-            metadata.get('Frame Index', '?'), frame.shape,
+            metadata.get("Frame Index", "?"),
+            frame.shape,
         )
         try:
             self.writer.write_frame(frame)
         except Exception as err:
             logger.error(
                 "VideoWriter.write_frame failed: frame_index=%s, frame_shape=%s, error=%s",
-                metadata.get('Frame Index', '?'), frame.shape, err,
+                metadata.get("Frame Index", "?"),
+                frame.shape,
+                err,
             )
             raise
 
         if self.write_frame_index:
             try:
-                fi = metadata['Frame Index'] - 1
+                fi = metadata["Frame Index"] - 1
                 self.frameindex_file.write(fi.to_bytes(4, byteorder="little"))
-                self.timestamps_file.write(str(metadata["Timestamp"].timestamp()) + '\n')
+                self.timestamps_file.write(
+                    str(metadata["Timestamp"].timestamp()) + "\n"
+                )
             except Exception as err:
                 logger.error(
                     "VideoWriter failed writing frame index/timestamp: frame_index=%s, error=%s",
-                    metadata.get('Frame Index', '?'), err,
+                    metadata.get("Frame Index", "?"),
+                    err,
                 )
                 raise
 
         return frame, metadata
 
     def close(self):
+        """Flush remaining frames and close the ffmpeg subprocess."""
         if self.write_frame_index:
             self.frameindex_file.close()
             self.timestamps_file.close()
@@ -523,7 +642,7 @@ import threading
 import queue
 import time
 from collections import deque
-from shutil import which
+from shutil import which  # noqa: F401 — used as mock target by tests
 
 
 class FFMPEG_Writer:
@@ -540,8 +659,22 @@ class FFMPEG_Writer:
     :param gpu_pixel_conversion: if True, use hwupload_cuda filter for GPU-side format conversion
     """
 
-    def __init__(self, file_path, input_dict={}, output_dict={}, verbosity=0,
-                 buffer_size=120, gpu_pixel_conversion=False, use_hwaccel=False):
+    def __init__(
+        self,
+        file_path,
+        input_dict={},
+        output_dict={},
+        verbosity=0,
+        buffer_size=120,
+        gpu_pixel_conversion=False,
+        use_hwaccel=False,
+    ):
+        """Initialize an ffmpeg pipe-based video writer.
+
+        :param file_path: Output video file path.
+        :param vcodec: Video codec name.
+        :param fps: Target frame rate.
+        """
 
         self.file_path = os.path.abspath(os.path.normpath(file_path))
         dir_path = os.path.dirname(self.file_path)
@@ -563,6 +696,7 @@ class FFMPEG_Writer:
         # which is not always on PATH when launched from a GUI shortcut.
         if self._FFMPEG_PATH is None:
             import sys
+
             _candidate = os.path.join(sys.prefix, "Library", "bin", "ffmpeg.exe")
             if os.path.isfile(_candidate):
                 self._FFMPEG_PATH = _candidate
@@ -583,7 +717,7 @@ class FFMPEG_Writer:
         """Drain stderr into a bounded buffer to prevent pipe deadlock."""
         try:
             for line in self._proc.stderr:
-                text = line.decode('utf-8', errors='replace').rstrip()
+                text = line.decode("utf-8", errors="replace").rstrip()
                 self._stderr_lines.append(text)
                 if text:
                     logger.debug("ffmpeg stderr: %s", text)
@@ -617,6 +751,7 @@ class FFMPEG_Writer:
             self._write_error = err
 
     def start_process(self, H, W, C):
+        """Launch the ffmpeg subprocess with the configured codec and resolution."""
         self.initialized = True
 
         if "-s" not in self.input_dict:
@@ -643,18 +778,25 @@ class FFMPEG_Writer:
             out_args.append(value)
 
         # GPU-side pixel format conversion via hwupload_cuda filter
-        vcodec = self.output_dict.get('-vcodec', '')
+        vcodec = self.output_dict.get("-vcodec", "")
         if self.gpu_pixel_conversion and vcodec in _NVENC_CODECS:
-            pix_fmt = self.output_dict.get('-pix_fmt', 'yuv420p')
-            out_args = ['-vf', f'format={pix_fmt},hwupload_cuda'] + out_args
+            pix_fmt = self.output_dict.get("-pix_fmt", "yuv420p")
+            out_args = ["-vf", f"format={pix_fmt},hwupload_cuda"] + out_args
 
         # CUDA hardware acceleration: add hwaccel flags before input
         hwaccel_args = []
         if self.use_hwaccel:
-            hwaccel_args = ['-hwaccel', 'cuda', '-hwaccel_output_format', 'cuda']
+            hwaccel_args = ["-hwaccel", "cuda", "-hwaccel_output_format", "cuda"]
             logger.info("Adding CUDA hwaccel flags to ffmpeg command")
 
-        cmd = [self._FFMPEG_PATH, "-y", "-f", "rawvideo"] + hwaccel_args + in_args + ["-i", "-", '-an', '-threads', '0'] + out_args + [self.file_path]
+        cmd = (
+            [self._FFMPEG_PATH, "-y", "-f", "rawvideo"]
+            + hwaccel_args
+            + in_args
+            + ["-i", "-", "-an", "-threads", "0"]
+            + out_args
+            + [self.file_path]
+        )
 
         self._cmd = " ".join(cmd)
 
@@ -664,15 +806,23 @@ class FFMPEG_Writer:
 
         if self.verbosity >= 2:
             logger.info(cmd)
-            self._proc = sp.Popen(cmd, stdin=sp.PIPE, stdout=sp.PIPE, stderr=sp.PIPE, bufsize=pipe_bufsize)
+            self._proc = sp.Popen(
+                cmd, stdin=sp.PIPE, stdout=sp.PIPE, stderr=sp.PIPE, bufsize=pipe_bufsize
+            )
         elif self.verbosity == 1:
             cmd += ["-v", "warning"]
             logger.info(cmd)
-            self._proc = sp.Popen(cmd, stdin=sp.PIPE, stdout=sp.PIPE, stderr=sp.PIPE, bufsize=pipe_bufsize)
+            self._proc = sp.Popen(
+                cmd, stdin=sp.PIPE, stdout=sp.PIPE, stderr=sp.PIPE, bufsize=pipe_bufsize
+            )
         else:
             cmd += ["-v", "error"]
             self._proc = sp.Popen(
-                cmd, stdin=sp.PIPE, stdout=sp.DEVNULL, stderr=sp.PIPE, bufsize=pipe_bufsize
+                cmd,
+                stdin=sp.PIPE,
+                stdout=sp.DEVNULL,
+                stderr=sp.PIPE,
+                bufsize=pipe_bufsize,
             )
 
         # Drain stderr in a background thread to prevent pipe buffer deadlock
@@ -702,7 +852,10 @@ class FFMPEG_Writer:
         if not self.initialized:
             logger.info(
                 "FFMPEG_Writer starting: frame_shape=(%d,%d,%d), file=%s",
-                H, W, C, self.file_path,
+                H,
+                W,
+                C,
+                self.file_path,
             )
             self.start_process(H, W, C)
             self._frame_count = 0
@@ -727,7 +880,10 @@ class FFMPEG_Writer:
             logger.debug(
                 "FFMPEG_Writer health: frames_written=%d, queue_depth=%d, "
                 "proc_alive=%s, file=%s",
-                self._frame_count, qsize, proc_alive, self.file_path,
+                self._frame_count,
+                qsize,
+                proc_alive,
+                self.file_path,
             )
 
     def close(self):

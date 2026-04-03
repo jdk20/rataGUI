@@ -13,8 +13,12 @@ class BaseCamera(ABC):
     # Static variable mapping names of loaded camera modules to their corresponding subclass
     modules = {}
 
-    # For every class that inherits from BaseCamera, the module name will be added to camera_models
     def __init_subclass__(cls, **kwargs):
+        """Auto-register each camera subclass keyed by its module filename.
+
+        Importing a camera module automatically makes it available in
+        ``BaseCamera.modules`` without manual registration.
+        """
         super().__init_subclass__(**kwargs)
         module_name = cls.__module__.split(".")[-1]
         cls.modules[module_name] = cls

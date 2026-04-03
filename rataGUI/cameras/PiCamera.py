@@ -17,15 +17,16 @@ class PiCamera(BaseCamera):
         "Framerate": 30,
         "Buffer Size": 10,
         "Width": 1280,
-        "Height": 720, 
+        "Height": 720,
     }
 
     @staticmethod
     def getAvailableCameras():
-        # print(Picamera2.global_camera_info())
-        return [PiCamera(cam['Num']) for cam in Picamera2.global_camera_info()]
+        """Return a list of available Raspberry Pi cameras."""
+        return [PiCamera(cam["Num"]) for cam in Picamera2.global_camera_info()]
 
     def __init__(self, cam_idx):
+        """Initialize a PiCamera for the given camera index."""
         super().__init__("PiCam " + str(cam_idx))
         self.cam_index = cam_idx
         self.last_frame = None
@@ -33,6 +34,7 @@ class PiCamera(BaseCamera):
         self.last_timestamp = -1
 
     def initializeCamera(self, prop_config, plugin_names=[]):
+        """Configure and start the Picamera2 stream. Returns True on success."""
         # Reset session variables
         self.last_frame = None
         self.frames_dropped = 0
@@ -47,23 +49,26 @@ class PiCamera(BaseCamera):
             "output_size": (prop_config.get("Width"), prop_config.get("Height")),
         }
 
-        video_config = self._stream.create_video_configuration(main = {"format": "XRGB8888"},
-                                                               buffer_count=prop_config.get("Buffer Size"),
-                                                               controls=controls, sensor=sensor_props)
+        video_config = self._stream.create_video_configuration(
+            main={"format": "XRGB8888"},
+            buffer_count=prop_config.get("Buffer Size"),
+            controls=controls,
+            sensor=sensor_props,
+        )
         self._stream.configure(video_config)
-
 
         self._stream.start()
         self._running = True
         return True
 
     def readCamera(self, colorspace="RGB"):
-        (frame, ), metadata = self._stream.capture_arrays(["main"])
-        timestamp = metadata['SensorTimestamp']
+        """Capture the next frame from the Pi camera. Returns (success, frame)."""
+        (frame,), metadata = self._stream.capture_arrays(["main"])
+        timestamp = metadata["SensorTimestamp"]
 
         # Detect dropped frames
         if self.last_timestamp >= 0:
-            frame_delta = (timestamp - self.last_timestamp) / (1e9/self.fps)
+            frame_delta = (timestamp - self.last_timestamp) / (1e9 / self.fps)
             self.frames_dropped += max(round(frame_delta) - 1, 0)
 
         self.last_timestamp = timestamp
@@ -79,6 +84,7 @@ class PiCamera(BaseCamera):
         return True, self.last_frame
 
     def closeCamera(self):
+        """Stop the Picamera2 stream and close the device."""
         if self._stream is not None:
             self._stream.stop()
             self._stream.close()

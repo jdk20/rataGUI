@@ -29,13 +29,13 @@ class SleapInference(BasePlugin):
         "Fixed Interval": 0,
         "Score Threshold": 0.5,
         "Kalman Filter": {"Disabled": False, "Enabled": True},
-        # "Batch Processing": {"Disabled": False, "Enabled": True},
         "Draw on frame": {"Enabled": True, "Disabled": False},
         "Write to file": {"Disabled": False, "Enabled": True},
         "Publish to socket": {"Disabled": False, "Enabled": True},
     }
 
     def __init__(self, cam_widget, config, queue_size=0):
+        """Initialize the SLEAP inference plugin, loading the frozen TF model."""
         super().__init__(cam_widget, config, queue_size)
         self.model_dir = os.path.normpath(config.get("Model directory"))
 
@@ -93,6 +93,7 @@ class SleapInference(BasePlugin):
                 logger.error("Unable to find enabled socket trigger")
 
     def process(self, frame, metadata):
+        """Run SLEAP pose estimation on the frame. Returns (frame, metadata)."""
         img_h, img_w, num_ch = frame.shape
         self.interval -= 1
 
@@ -147,6 +148,7 @@ class SleapInference(BasePlugin):
         return frame, metadata
 
     def close(self):
+        """Deactivate SLEAP inference and close the CSV writer if open."""
         logger.info("Sleap Inference closed")
         self.active = False
 
@@ -159,6 +161,7 @@ import re
 
 
 def load_frozen_model(model_dir):
+    """Load a frozen TensorFlow graph from the given model directory. Returns a TF session."""
     # Load frozen graph using TensorFlow 1.x functions
     model_file = [file for file in os.listdir(model_dir) if file.endswith(".pb")]
     if len(model_file) > 1:

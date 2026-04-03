@@ -9,6 +9,7 @@ logger = logging.getLogger(__name__)
 
 
 class VideoReader(BaseCamera):
+    """Video file reader that replays recorded video as a camera source."""
 
     DEFAULT_PROPS = {
         "File path": "",
@@ -16,14 +17,17 @@ class VideoReader(BaseCamera):
 
     @staticmethod
     def getAvailableCameras():
-        return [VideoReader(f"Video Reader {i+1}") for i in range(1)]
+        """Return a list containing a single default VideoReader instance."""
+        return [VideoReader(f"Video Reader {i + 1}") for i in range(1)]
 
     def __init__(self, readerID):
+        """Initialize a VideoReader with a reader identifier."""
         super().__init__(readerID)
         self.last_frame = None
         self.file_path = ""
 
     def initializeCamera(self, prop_config, plugin_names=[]):
+        """Open the video file specified in the config. Returns True on success."""
         self.input_params = {}
         self.output_params = {}
         for prop_name, value in prop_config.as_dict().items():
@@ -41,6 +45,7 @@ class VideoReader(BaseCamera):
             return False
 
     def readCamera(self, colorspace="RGB"):
+        """Read the next frame from the video file. Returns (success, frame)."""
         ret, frame = self._stream.read()
         if ret:
             self.frames_acquired += 1
@@ -54,6 +59,7 @@ class VideoReader(BaseCamera):
         return ret, self.last_frame
 
     def closeCamera(self):
+        """Release the video file capture."""
         if self._stream is not None:
             self._stream.release()
 

@@ -21,13 +21,23 @@ class BasePlugin(ABC):
     # Static variable mapping names of loaded plugin modules to their corresponding subclass
     modules = {}
 
-    # For every class that inherits from BasePlugin, the module name will be added to plugins
     def __init_subclass__(cls, **kwargs):
+        """Auto-register each plugin subclass keyed by its module filename.
+
+        Importing a plugin module automatically makes it available in
+        ``BasePlugin.modules`` without manual registration.
+        """
         super().__init_subclass__(**kwargs)
         module_name = cls.__module__.split(".")[-1]
         cls.modules[module_name] = cls
 
     def __init__(self, cam_widget: QWidget, config: ConfigManager, queue_size=0):
+        """Initialize plugin with a reference to its parent camera widget and frozen config.
+
+        :param cam_widget: The CameraWidget (or PipelineContext) this plugin belongs to.
+        :param config: ConfigManager whose settings are frozen at initialization.
+        :param queue_size: Maximum size of the input async queue (0 = unbounded).
+        """
         logger.info(
             f"Started {type(self).__name__} for: {cam_widget.camera.getDisplayName()}"
         )
@@ -49,13 +59,3 @@ class BasePlugin(ABC):
         """Deactivates plugin and closes any plugin-specific resources"""
         self.active = False
         logger.info(f"{type(self).__name__} closed")
-
-    # # Overwrite with any metadata produced by plugin
-    # @staticmethod
-    # def get_metadata_names(self) -> list:
-    #     """
-    #     Returns list of metadata names produced by plugin (ex. DLC Pose)
-
-    #     Used to populate metadata
-    #     """
-    #     return list()
