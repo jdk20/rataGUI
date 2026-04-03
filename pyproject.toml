@@ -34,6 +34,7 @@ include = ["rataGUI*"]
 
 [project.scripts]
 rataGUI = "rataGUI.main:main"
+rataGUI-headless = "rataGUI.headless.cli:main"
 
 
 [project.urls]
