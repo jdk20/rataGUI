@@ -42,6 +42,9 @@ class CameraWidget(QtWidgets.QWidget, Ui_CameraWidget):
     # Signal for when camera and plugins have been initialized
     pipeline_initialized = pyqtSignal()
 
+    # Signal emitted when a plugin is deactivated due to repeated errors
+    plugin_failed = pyqtSignal(str, str)  # (camera_name, plugin_name)
+
     def __init__(
         self, camera=None, cam_config=None, plugins=[], triggers=[], session_dir=""
     ):
@@ -420,7 +423,12 @@ class CameraWidget(QtWidgets.QWidget, Ui_CameraWidget):
                         self.camera.getDisplayName(),
                         self.camera.frames_acquired,
                     )
+                    plugin.failed = True
                     plugin.active = False
+                    self.plugin_failed.emit(
+                        self.camera.getDisplayName(),
+                        type(plugin).__name__,
+                    )
                     plugin.close()
             finally:
                 if ring_buffer is not None and slot_idx is not None:
