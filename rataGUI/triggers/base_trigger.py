@@ -30,7 +30,7 @@ class BaseTrigger(ABC):
 
     @staticmethod
     @abstractmethod
-    def getAvailableDevices():
+    def getAvailableDevices() -> list:
         """Return a list of trigger instances for every available device.
 
         Each subclass must implement this to discover connected hardware.
@@ -38,11 +38,11 @@ class BaseTrigger(ABC):
         pass
 
     @staticmethod
-    def releaseResources():
+    def releaseResources() -> None:
         """Release static resources shared across all instances (optional override)."""
         pass
 
-    def __init__(self, deviceID):
+    def __init__(self, deviceID: str):
         """Initialize the trigger with a device identifier.
 
         :param deviceID: Unique identifier for the trigger device.
@@ -67,7 +67,7 @@ class BaseTrigger(ABC):
         """
         raise NotImplementedError()
 
-    def close(self):
+    def close(self) -> None:
         """
         Deactivates trigger and closes any trigger-dependent objects
         """

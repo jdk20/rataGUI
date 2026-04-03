@@ -14,7 +14,9 @@ from rataGUI import launch_config
 logger = logging.getLogger(__name__)
 
 
-def load_modules(package_name, config_key, label, exclude_files):
+def load_modules(
+    package_name: str, config_key: str, label: str, exclude_files: list[str]
+) -> None:
     """Import submodules of a package, triggering ``__init_subclass__`` registration.
 
     When a saved launch config exists and the user chose "Don't show again",

@@ -35,7 +35,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
     # Helper utilities
     # ------------------------------------------------------------------
 
-    def _camera_id_from_name(self, cam_name):
+    def _camera_id_from_name(self, cam_name: str) -> str:
         """Look up the internal camera ID for a given display name.
 
         :param cam_name: Display name shown in the camera list.
@@ -48,7 +48,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         raise ValueError(f"No camera found with display name: {cam_name}")
 
     @staticmethod
-    def _merge_and_save_json(path, new_entries):
+    def _merge_and_save_json(path: str, new_entries: dict) -> None:
         """Load existing JSON from *path*, merge *new_entries*, and write back.
 
         Creates the file if it does not exist.
@@ -67,7 +67,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             json.dump(existing, f, indent=2)
 
     @staticmethod
-    def _load_json_if_exists(path):
+    def _load_json_if_exists(path: str) -> dict | None:
         """Load and return parsed JSON from *path*, or ``None`` if missing/empty.
 
         :param path: File path to a JSON file.
@@ -1024,7 +1024,7 @@ def get_checked_items(check_list: QtWidgets.QListWidget) -> list:
     return checked
 
 
-def add_config_handler(config, key, value):
+def add_config_handler(config, key: str, value) -> None:
     """Create and register a Qt widget handler for a single config key-value pair.
 
     The widget type is determined by the value's Python type:
@@ -1087,7 +1087,7 @@ def add_config_handler(config, key, value):
         )
 
 
-def make_config_layout(config, cols=2, extend_line_edits=True):
+def make_config_layout(config, cols: int = 2, extend_line_edits: bool = True):
     """
     Generate a QHBoxLayout based on the input ConfigManager where each column is a QFormLayout
     For each row, the label is the config dict key, and the field is the config handler for that key.
@@ -1153,7 +1153,7 @@ def make_config_layout(config, cols=2, extend_line_edits=True):
     return layout
 
 
-def open_file_dialog(line_edit, is_dir: bool):
+def open_file_dialog(line_edit, is_dir: bool) -> None:
     """Open a native file/directory dialog and write the selected path into *line_edit*.
 
     :param line_edit: Target QLineEdit to populate with the chosen path.

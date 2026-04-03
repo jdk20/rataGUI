@@ -31,7 +31,7 @@ class BasePlugin(ABC):
         module_name = cls.__module__.split(".")[-1]
         cls.modules[module_name] = cls
 
-    def __init__(self, cam_widget: QWidget, config: ConfigManager, queue_size=0):
+    def __init__(self, cam_widget: QWidget, config: ConfigManager, queue_size: int = 0):
         """Initialize plugin with a reference to its parent camera widget and frozen config.
 
         :param cam_widget: The CameraWidget (or PipelineContext) this plugin belongs to.
@@ -55,7 +55,7 @@ class BasePlugin(ABC):
         raise NotImplementedError("Plugin process function not implemented")
 
     # Override for custom behavior
-    def close(self):
+    def close(self) -> None:
         """Deactivates plugin and closes any plugin-specific resources"""
         self.active = False
         logger.info(f"{type(self).__name__} closed")

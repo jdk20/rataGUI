@@ -23,7 +23,7 @@ logger.addHandler(console)
 
 # set up logging INFO messages or higher to log file
 # file_handlers = {}
-def add_file_logger(file_path):
+def add_file_logger(file_path: str) -> None:
     """Attach a file handler to the package logger that writes INFO+ messages.
 
     Creates the log directory if it does not exist.  The log filename includes

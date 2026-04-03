@@ -1,5 +1,7 @@
 """Headless pipeline runner for rataGUI — no Qt dependency."""
 
+from __future__ import annotations
+
 import os
 import json
 import time
@@ -10,6 +12,7 @@ from importlib import import_module
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
 from multiprocessing.shared_memory import SharedMemory
+from typing import Any
 
 import numpy as np
 
@@ -48,7 +51,7 @@ class PipelineRunner:
 
     EXCLUDED_PLUGINS = {"FrameDisplay"}
 
-    def __init__(self, config, save_dir=None):
+    def __init__(self, config: dict | str, save_dir: str | None = None) -> None:
         if isinstance(config, str):
             with open(config) as f:
                 config = json.load(f)
@@ -63,16 +66,16 @@ class PipelineRunner:
     # Public API
     # ------------------------------------------------------------------
 
-    def start(self):
+    def start(self) -> None:
         """Block until all pipelines complete or :meth:`stop` is called."""
         asyncio.run(self.run())
 
-    def stop(self):
+    def stop(self) -> None:
         """Signal all pipelines to stop.  Thread-safe."""
         for ctx in self._contexts:
             ctx.stop_camera_pipeline()
 
-    async def run(self):
+    async def run(self) -> None:
         """Initialise and run all camera pipelines concurrently."""
         self._load_modules()
 
@@ -231,7 +234,7 @@ class PipelineRunner:
     # Module loading
     # ------------------------------------------------------------------
 
-    def _load_modules(self):
+    def _load_modules(self) -> None:
         """Import camera/plugin/trigger modules to trigger __init_subclass__ registration."""
         for kind, key in [
             ("cameras", "Enabled Camera Modules"),
@@ -250,7 +253,7 @@ class PipelineRunner:
     # Single-pipeline lifecycle
     # ------------------------------------------------------------------
 
-    async def _run_single_pipeline(self, ctx):
+    async def _run_single_pipeline(self, ctx: PipelineContext) -> None:
         """Run one camera's full pipeline lifecycle."""
         try:
             if ctx.multiprocess:
@@ -267,7 +270,7 @@ class PipelineRunner:
                     )
             ctx.clean_session_dir()
 
-    async def _start_threaded_pipeline(self, ctx):
+    async def _start_threaded_pipeline(self, ctx: PipelineContext) -> None:
         """Single-process pipeline using ThreadPoolExecutor."""
         try:
             success = ctx.camera.initializeCamera(ctx.camera_config, ctx.plugin_names)
@@ -283,7 +286,7 @@ class PipelineRunner:
             logger.exception(err)
             ctx.stop_camera_pipeline()
 
-    async def _start_multiprocess_pipeline(self, ctx):
+    async def _start_multiprocess_pipeline(self, ctx: PipelineContext) -> None:
         """Multi-process pipeline: camera in subprocess, plugins in main process."""
         from rataGUI.camera_process import camera_acquisition_loop
 
@@ -347,7 +350,7 @@ class PipelineRunner:
         finally:
             self._cleanup_multiprocess(ctx)
 
-    def _cleanup_multiprocess(self, ctx):
+    def _cleanup_multiprocess(self, ctx: PipelineContext) -> None:
         """Clean up multiprocess resources."""
         if ctx._mp_process is not None and ctx._mp_process.is_alive():
             try:
@@ -372,7 +375,7 @@ class PipelineRunner:
     # Async pipeline methods (ported from CameraWidget)
     # ------------------------------------------------------------------
 
-    async def _acquire_frames(self, ctx):
+    async def _acquire_frames(self, ctx: PipelineContext) -> None:
         """Read frames from camera in thread pool and enqueue them."""
         t0 = time.time()
         try:
@@ -411,7 +414,7 @@ class PipelineRunner:
             logger.debug("FPS: %s", ctx.camera.frames_acquired / elapsed)
         ctx.camera.closeCamera()
 
-    def _read_from_mp_queue(self, ctx):
+    def _read_from_mp_queue(self, ctx: PipelineContext) -> tuple[int, dict] | None:
         """Blocking read from multiprocessing metadata queue."""
         import queue as _queue
 
@@ -425,7 +428,7 @@ class PipelineRunner:
                 continue
         return None
 
-    async def _acquire_frames_mp(self, ctx):
+    async def _acquire_frames_mp(self, ctx: PipelineContext) -> None:
         """Acquire frames from camera subprocess via shared memory."""
         t0 = time.time()
         try:
@@ -463,8 +466,12 @@ class PipelineRunner:
             logger.debug("FPS: %s", ctx.camera.frames_acquired / elapsed)
 
     async def _put_to_queue(
-        self, target_queue, item, drop_policy="block", ring_buffer=None
-    ):
+        self,
+        target_queue: Any,
+        item: Any,
+        drop_policy: str = "block",
+        ring_buffer: Any = None,
+    ) -> None:
         """Put item to queue, respecting the drop policy."""
         if drop_policy == "drop_oldest" and target_queue.full():
             try:
@@ -476,7 +483,9 @@ class PipelineRunner:
                 pass
         await target_queue.put(item)
 
-    async def _plugin_process(self, ctx, plugin, ring_buffer=None):
+    async def _plugin_process(
+        self, ctx: PipelineContext, plugin: Any, ring_buffer: Any = None
+    ) -> None:
         """Async execution loop for a single plugin."""
         loop = asyncio.get_running_loop()
         failures = 0
@@ -549,7 +558,9 @@ class PipelineRunner:
                     ring_buffer.release(slot_idx)
                 plugin.in_queue.task_done()
 
-    async def _fan_out(self, source_queue, target_plugins, ring_buffer=None):
+    async def _fan_out(
+        self, source_queue: Any, target_plugins: list, ring_buffer: Any = None
+    ) -> None:
         """Distribute frames from one source queue to multiple independent plugins."""
         loop = asyncio.get_running_loop()
         while True:
@@ -585,7 +596,9 @@ class PipelineRunner:
             finally:
                 source_queue.task_done()
 
-    async def _process_plugin_pipeline(self, ctx, multiprocess=False):
+    async def _process_plugin_pipeline(
+        self, ctx: PipelineContext, multiprocess: bool = False
+    ) -> None:
         """Orchestrate acquisition, plugin chain, and fan-out."""
         if multiprocess:
             acquisition_task = asyncio.create_task(self._acquire_frames_mp(ctx))

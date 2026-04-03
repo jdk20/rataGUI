@@ -48,7 +48,12 @@ class CameraWidget(QtWidgets.QWidget, Ui_CameraWidget):
     plugin_failed = pyqtSignal(str, str)  # (camera_name, plugin_name)
 
     def __init__(
-        self, camera=None, cam_config=None, plugins=[], triggers=[], session_dir=""
+        self,
+        camera=None,
+        cam_config=None,
+        plugins=None,
+        triggers=None,
+        session_dir: str = "",
     ):
         super().__init__()
         self.setupUi(self)
@@ -65,7 +70,7 @@ class CameraWidget(QtWidgets.QWidget, Ui_CameraWidget):
         self.camera_config = cam_config
 
         # Make triggers available to camera pipeline
-        self.triggers = triggers
+        self.triggers = triggers if triggers is not None else []
 
         # Instantiate plugins with camera-specific settings
         self.plugins = []
@@ -74,7 +79,7 @@ class CameraWidget(QtWidgets.QWidget, Ui_CameraWidget):
         )
         self.plugin_names = []
         self.failed_plugins = {}
-        for Plugin, config in plugins:
+        for Plugin, config in plugins or []:
             try:
                 self.plugins.append(Plugin(self, config))
                 self.plugin_names.append(Plugin.__name__)
@@ -113,14 +118,14 @@ class CameraWidget(QtWidgets.QWidget, Ui_CameraWidget):
         self.threadpool.start(self.pipeline_thread)
 
     @pyqtSlot()
-    def start_camera_pipeline(self):
+    def start_camera_pipeline(self) -> None:
         """Entry point for the pipeline thread. Delegates to threaded or multiprocess startup."""
         if self.multiprocess:
             self._start_multiprocess_pipeline()
         else:
             self._start_threaded_pipeline()
 
-    def _start_threaded_pipeline(self):
+    def _start_threaded_pipeline(self) -> None:
         """Original single-process pipeline using ThreadPoolExecutor."""
         try:
             success = self.camera.initializeCamera(
@@ -142,7 +147,7 @@ class CameraWidget(QtWidgets.QWidget, Ui_CameraWidget):
             logger.exception(err)
             self.stop_camera_pipeline()
 
-    def _start_multiprocess_pipeline(self):
+    def _start_multiprocess_pipeline(self) -> None:
         """Multi-process pipeline: camera runs in a subprocess, plugins in main process."""
         from rataGUI.camera_process import camera_acquisition_loop
 
@@ -214,7 +219,7 @@ class CameraWidget(QtWidgets.QWidget, Ui_CameraWidget):
         finally:
             self._cleanup_multiprocess()
 
-    def _cleanup_multiprocess(self):
+    def _cleanup_multiprocess(self) -> None:
         """Clean up multiprocess resources."""
         if self._mp_process is not None and self._mp_process.is_alive():
             try:
@@ -235,7 +240,7 @@ class CameraWidget(QtWidgets.QWidget, Ui_CameraWidget):
                 pass  # unlink is a no-op on Windows; may also fail if already cleaned
             self._mp_shm = None
 
-    def stop_camera_pipeline(self):
+    def stop_camera_pipeline(self) -> None:
         """Signal the camera and plugins to stop and clean up if no data was produced."""
         # Signal to event loop to stop camera and plugins
         self.camera._running = False
@@ -250,7 +255,7 @@ class CameraWidget(QtWidgets.QWidget, Ui_CameraWidget):
 
         self.clean_session_dir()
 
-    async def acquire_frames(self):
+    async def acquire_frames(self) -> None:
         """Read frames from the camera in a thread pool and enqueue for plugin processing.
 
         Runs until the camera stops. Closes the camera on exit and logs FPS.
@@ -295,7 +300,7 @@ class CameraWidget(QtWidgets.QWidget, Ui_CameraWidget):
         # Close camera when camera stops streaming
         self.camera.closeCamera()
 
-    def _read_from_mp_queue(self):
+    def _read_from_mp_queue(self) -> tuple | None:
         """Blocking read from the multiprocessing metadata queue.
 
         Returns ``(slot_idx, metadata)`` or ``None`` if the camera stopped.
@@ -314,7 +319,7 @@ class CameraWidget(QtWidgets.QWidget, Ui_CameraWidget):
                 continue
         return None
 
-    async def acquire_frames_mp(self):
+    async def acquire_frames_mp(self) -> None:
         """Acquire frames from camera subprocess via shared memory."""
         t0 = time.time()
         try:
@@ -354,8 +359,8 @@ class CameraWidget(QtWidgets.QWidget, Ui_CameraWidget):
             logger.debug("FPS: " + str(self.camera.frames_acquired / elapsed))
 
     async def _put_to_queue(
-        self, target_queue, item, drop_policy="block", ring_buffer=None
-    ):
+        self, target_queue, item, drop_policy: str = "block", ring_buffer=None
+    ) -> None:
         """Put item to a queue, respecting the drop policy.
 
         When *ring_buffer* is provided and the dropped item is a slot index,
@@ -373,7 +378,7 @@ class CameraWidget(QtWidgets.QWidget, Ui_CameraWidget):
                 pass
         await target_queue.put(item)
 
-    async def plugin_process(self, plugin, ring_buffer=None):
+    async def plugin_process(self, plugin, ring_buffer=None) -> None:
         """Async execution loop for a single plugin.
 
         Reads from the plugin's input queue, runs its ``process()`` method
@@ -469,7 +474,9 @@ class CameraWidget(QtWidgets.QWidget, Ui_CameraWidget):
                     ring_buffer.release(slot_idx)
                 plugin.in_queue.task_done()
 
-    async def fan_out(self, source_queue, target_plugins, ring_buffer=None):
+    async def fan_out(
+        self, source_queue, target_plugins: list, ring_buffer=None
+    ) -> None:
         """Read from one source queue and distribute to multiple independent plugin queues.
 
         When *ring_buffer* is provided, frames are published into the ring
@@ -525,7 +532,7 @@ class CameraWidget(QtWidgets.QWidget, Ui_CameraWidget):
             finally:
                 source_queue.task_done()
 
-    async def process_plugin_pipeline(self, multiprocess=False):
+    async def process_plugin_pipeline(self, multiprocess: bool = False) -> None:
         """Orchestrate the full async pipeline: acquisition, serial chain, fan-out, and shutdown.
 
         Wires serial plugins in a chain via their queues, sets up fan-out for
@@ -639,12 +646,12 @@ class CameraWidget(QtWidgets.QWidget, Ui_CameraWidget):
 
         self._acquisition_queue = None
 
-    def stop_plugins(self):
+    def stop_plugins(self) -> None:
         """Deactivate all plugins in this widget's pipeline."""
         for plugin in self.plugins:
             plugin.active = False
 
-    def close_plugins(self):
+    def close_plugins(self) -> None:
         """Close all plugins, logging any errors that occur during teardown."""
         for plugin in self.plugins:
             try:
@@ -653,7 +660,7 @@ class CameraWidget(QtWidgets.QWidget, Ui_CameraWidget):
                 logger.exception(err)
                 logger.error(f"Plugin: {type(plugin).__name__} failed to close")
 
-    def close_widget(self):
+    def close_widget(self) -> None:
         """Finalize the widget: close all plugins and schedule Qt deletion."""
         logger.info(
             "Stopped pipeline for camera: {}".format(self.camera.getDisplayName())
@@ -661,7 +668,7 @@ class CameraWidget(QtWidgets.QWidget, Ui_CameraWidget):
         self.close_plugins()
         self.deleteLater()
 
-    def clean_session_dir(self):
+    def clean_session_dir(self) -> None:
         """Remove the session directory if it contains only metadata or is empty."""
         if os.path.isdir(self.save_dir):
             dir_list = os.listdir(self.save_dir)
@@ -679,7 +686,7 @@ class CameraWidget(QtWidgets.QWidget, Ui_CameraWidget):
             else:  # Log metadata to file
                 self.save_widget_data()
 
-    def save_widget_data(self):
+    def save_widget_data(self) -> None:
         """Write pipeline metadata (camera info, plugin states, settings) to a JSON file."""
         metadata = {}
         metadata["RataGUI Version"] = __version__

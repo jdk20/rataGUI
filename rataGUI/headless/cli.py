@@ -14,7 +14,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def main():
+def main() -> None:
     """Parse CLI arguments, load configuration, and run headless pipelines.
 
     Supports graceful shutdown via SIGINT and SIGTERM.

@@ -90,7 +90,7 @@ class FrameRingBuffer:
 
     # -- Consumer API --------------------------------------------------------
 
-    def get_view(self, slot_idx: int):
+    def get_view(self, slot_idx: int) -> tuple[np.ndarray, dict]:
         """Return a *read-only* numpy view of the frame and its metadata.
 
         :returns: ``(frame_view, metadata)`` tuple.
@@ -100,7 +100,7 @@ class FrameRingBuffer:
         view.flags.writeable = False
         return view, self.metadata[slot_idx]
 
-    def release(self, slot_idx: int):
+    def release(self, slot_idx: int) -> None:
         """Signal that this consumer is done with *slot_idx*.
 
         When all consumers have released the slot it becomes available for
@@ -114,13 +114,13 @@ class FrameRingBuffer:
 
     # -- Configuration -------------------------------------------------------
 
-    def set_num_consumers(self, n: int):
+    def set_num_consumers(self, n: int) -> None:
         """Update the expected consumer count for future publishes."""
         self.num_consumers = n
 
     # -- Internal ------------------------------------------------------------
 
-    def _reallocate(self, new_shape):
+    def _reallocate(self, new_shape: tuple[int, int, int]) -> None:
         """Resize the internal buffer when frame dimensions change."""
         h, w, c = new_shape
         logger.info(

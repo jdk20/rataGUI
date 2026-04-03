@@ -1,9 +1,12 @@
 """Duck-type replacements for Qt objects used in headless mode."""
 
+from __future__ import annotations
+
 import os
 import json
 import shutil
 import logging
+from typing import Any
 
 from rataGUI import __version__
 from rataGUI.utils import slugify
@@ -18,11 +21,11 @@ class HeadlessConfigManager:
     ``get``, ``as_dict``, ``set``, ``set_defaults``, ``set_many``.
     """
 
-    def __init__(self, data: dict = None):
+    def __init__(self, data: dict | None = None):
         """Initialize the config manager with an optional starting dict."""
         self._data = dict(data) if data else {}
 
-    def get(self, key, default=None):
+    def get(self, key: str, default: Any = None) -> Any:
         """Return the value for *key*, or *default* if not present."""
         return self._data.get(key, default)
 
@@ -30,11 +33,11 @@ class HeadlessConfigManager:
         """Return a shallow copy of the current configuration as a plain dict."""
         return dict(self._data)
 
-    def set(self, key, value):
+    def set(self, key: str, value: Any) -> None:
         """Set a single configuration key to *value*."""
         self._data[key] = value
 
-    def set_defaults(self, defaults: dict):
+    def set_defaults(self, defaults: dict) -> None:
         """Set defaults, normalizing DEFAULT_CONFIG value types.
 
         Mirrors the normalization in ``main_window.py:add_config_handler``:
@@ -56,7 +59,7 @@ class HeadlessConfigManager:
             else:
                 self._data[key] = value
 
-    def set_many(self, d: dict):
+    def set_many(self, d: dict) -> None:
         """Bulk-update configuration from a dict."""
         self._data.update(d)
 
@@ -110,7 +113,7 @@ class PipelineContext:
         self._mp_control_queue = None
         self._mp_error_queue = None
 
-    def stop_camera_pipeline(self):
+    def stop_camera_pipeline(self) -> None:
         """Signal the pipeline to stop."""
         self.camera._running = False
         self.active = False
@@ -121,7 +124,7 @@ class PipelineContext:
                 pass
         self.clean_session_dir()
 
-    def save_widget_data(self):
+    def save_widget_data(self) -> None:
         """Log pipeline metadata to JSON file."""
         metadata = {}
         metadata["RataGUI Version"] = __version__
@@ -149,7 +152,7 @@ class PipelineContext:
         with open(file_path, "w") as file:
             json.dump(metadata, file, indent=2)
 
-    def clean_session_dir(self):
+    def clean_session_dir(self) -> None:
         """Remove save_dir if it contains only the metadata file or is empty."""
         if os.path.isdir(self.save_dir):
             dir_list = os.listdir(self.save_dir)

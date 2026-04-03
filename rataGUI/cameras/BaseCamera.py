@@ -31,10 +31,10 @@ class BaseCamera(ABC):
 
     # Optional method to release static resources upon exiting program
     @staticmethod
-    def releaseResources():
+    def releaseResources() -> None:
         pass
 
-    def __init__(self, cameraID):
+    def __init__(self, cameraID: str):
         self._stream = None
         self.cameraID = cameraID
         self.display_name = None
@@ -88,7 +88,9 @@ class BaseCamera(ABC):
         return {"Frame Index": self.frames_acquired}
 
     @classmethod
-    def create_and_initialize(cls, camera_id, config_dict, plugin_names):
+    def create_and_initialize(
+        cls, camera_id: str, config_dict: dict, plugin_names: list[str]
+    ) -> "BaseCamera":
         """Factory method for subprocess use.
 
         Creates a camera instance, builds a mock ConfigManager from a plain
@@ -115,5 +117,5 @@ class BaseCamera(ABC):
         camera.frames_acquired = 0
         return camera
 
-    def __str__(self):
+    def __str__(self) -> str:
         return "Camera ID: {}".format(str(self.cameraID))
