@@ -68,6 +68,96 @@ Note: A "session" is a recording session. Every time you press start, it starts 
 ## Video Demo -->
 
 
+# Headless Mode
+
+RataGUI can run without a GUI using the headless mode, which provides both a CLI and a Python API. This is useful for scripted experiments, server deployments, and CI pipelines. The FrameDisplay plugin is automatically excluded in headless mode.
+
+## CLI
+
+After installing rataGUI, the `rataGUI-headless` command is available:
+
+```bash
+# Run with a config file
+rataGUI-headless config.json
+
+# Override save directory
+rataGUI-headless config.json --save-dir /data/output
+
+# Use multiprocess camera acquisition
+rataGUI-headless config.json --multiprocess
+```
+
+Press Ctrl+C to stop all pipelines gracefully.
+
+### Config file format
+
+The config file uses the same JSON format as `launch_config.json`, with optional per-module settings:
+
+```json
+{
+  "Enabled Camera Modules": ["VideoReader"],
+  "Enabled Plugin Modules": ["video_writer", "metadata_writer"],
+  "Enabled Trigger Modules": [],
+  "Save Directory": "/data/recordings",
+  "cameras": {
+    "Video Reader 1": {
+      "File path": "/data/input.mp4"
+    }
+  },
+  "plugins": {
+    "VideoWriter": {
+      "vcodec": "libx264",
+      "framerate": 30
+    }
+  },
+  "triggers": {}
+}
+```
+
+If `cameras`, `plugins`, or `triggers` keys are absent, each module's `DEFAULT_PROPS`/`DEFAULT_CONFIG` defaults are used.
+
+## Python API
+
+```python
+from rataGUI.headless import PipelineRunner
+
+# From a config file
+runner = PipelineRunner("config.json")
+
+# Or from a dict
+runner = PipelineRunner({
+    "Enabled Camera Modules": ["VideoReader"],
+    "Enabled Plugin Modules": ["video_writer"],
+    "Enabled Trigger Modules": [],
+    "Save Directory": "/data/recordings",
+    "cameras": {
+        "Video Reader 1": {"File path": "/data/input.mp4"}
+    },
+})
+
+# Synchronous — blocks until pipelines complete or stop() is called
+runner.start()
+
+# To stop from another thread or signal handler:
+runner.stop()
+```
+
+For async usage:
+
+```python
+import asyncio
+from rataGUI.headless import PipelineRunner
+
+async def main():
+    runner = PipelineRunner("config.json")
+    await runner.run()
+
+asyncio.run(main())
+```
+
+The `PipelineRunner` runs the same asyncio pipeline as the GUI (frame acquisition, serial plugin chaining, independent plugin fan-out with ring buffers), just without Qt widgets.
+
+
 # Development Guide
 
 RataGUI's modular framework was built for user customizability and integration. We encourage you to [fork](https://guides.github.com/activities/forking/#fork) the package [Github repository](https://github.com/BrainHu42/rataGUI) and add additional modules for your specific use case. Then, clone the forked repository and install in editable mode:

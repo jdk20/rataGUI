@@ -66,9 +66,22 @@ Multi-process mode (`camera_process.py`) uses shared memory + queues to eliminat
 
 Uses `pyqtconfig.ConfigManager`. Each module defines `DEFAULT_PROPS` or `DEFAULT_CONFIG` dicts that auto-generate UI widgets. Session state saved as JSON in `launch_config.json`.
 
+### Headless Mode
+
+The `rataGUI/headless/` package provides a Qt-free pipeline runner with both a CLI and Python API:
+
+- `rataGUI/headless/runner.py` — `PipelineRunner` class: loads modules, discovers cameras, builds pipeline contexts, and runs the same asyncio pipeline as the GUI. Public API: `start()` (blocking), `stop()` (thread-safe), `run()` (async).
+- `rataGUI/headless/context.py` — `HeadlessConfigManager` (dict-backed replacement for `pyqtconfig.ConfigManager`) and `PipelineContext` (duck-type replacement for `CameraWidget` passed to plugins as `cam_widget`).
+- `rataGUI/headless/cli.py` — CLI entry point (`rataGUI-headless` console script). Reads config JSON, handles SIGINT/SIGTERM.
+
+The `FrameDisplay` plugin is auto-excluded in headless mode. All other plugins work unchanged because `PipelineContext` satisfies the same `cam_widget` interface they use (`camera`, `save_dir`, `camera_config`, `triggers`).
+
 ### Key Source Paths
 
-- `rataGUI/main.py` — Entry point, start menu or direct launch
+- `rataGUI/main.py` — GUI entry point, start menu or direct launch
+- `rataGUI/headless/runner.py` — Headless entry point, PipelineRunner API
+- `rataGUI/headless/context.py` — HeadlessConfigManager and PipelineContext
+- `rataGUI/headless/cli.py` — CLI for headless mode
 - `rataGUI/interface/camera_widget.py` — Core pipeline orchestration (acquisition, fan-out, plugin scheduling)
 - `rataGUI/frame_ring_buffer.py` — Zero-copy ring buffer for multi-consumer frame sharing
 - `rataGUI/camera_process.py` — Multi-process camera acquisition target
