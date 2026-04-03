@@ -32,6 +32,7 @@ class BasePlugin(ABC):
             f"Started {type(self).__name__} for: {cam_widget.camera.getDisplayName()}"
         )
         self.active = True
+        self.failed = False
         self.blocking = False
         self.independent = False  # Independent plugins can run in parallel via fan-out
         self.drop_policy = "block"  # "block" or "drop_oldest" when in_queue is full

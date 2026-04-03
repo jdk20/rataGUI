@@ -40,10 +40,12 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         if dark_mode:
             self.active_color = QtGui.QColorConstants.DarkMagenta
             self.paused_color = QtGui.QColorConstants.DarkGray
+            self.failed_color = QtGui.QColorConstants.DarkRed
             self.inactive_color = QtGui.QColorConstants.Black
         else:
             self.active_color = QtGui.QColorConstants.Green
             self.paused_color = QtGui.QColorConstants.LightGray
+            self.failed_color = QtGui.QColorConstants.Red
             self.inactive_color = QtGui.QColorConstants.DarkGray
 
         # Create mappings from camID to camera, widget, config and model
@@ -113,8 +115,50 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                 latency_str = str(round(cam_widget.avg_latency, 3)) + " ms"
                 self.cam_stats.item(row, 4).setText(latency_str)
 
-    # def update_plugin_stats(self):
-    #     pass
+        self.update_plugin_pipeline()
+
+    def update_plugin_pipeline(self):
+        """Refresh plugin pipeline table to reflect runtime state changes."""
+        for row, camID in enumerate(self.camera_names.keys()):
+            widget = self.camera_widgets.get(camID)
+            if widget is None:
+                continue
+            for col in range(self.plugin_pipeline.columnCount()):
+                header = self.plugin_pipeline.horizontalHeaderItem(col)
+                if header is None:
+                    continue
+                plugin_name = header.text()
+                if plugin_name not in self.plugins:
+                    continue
+
+                item = self.plugin_pipeline.item(row, col)
+                if item is None:
+                    continue
+
+                plugin_active = None
+                plugin_failed = False
+                for plugin in widget.plugins:
+                    if isinstance(plugin, self.plugins[plugin_name]):
+                        plugin_active = plugin.active
+                        plugin_failed = getattr(plugin, 'failed', False)
+                        break
+
+                if plugin_active is None:
+                    continue
+
+                current_text = item.text()
+                if plugin_failed and current_text != "Failed":
+                    self.plugin_pipeline.blockSignals(True)
+                    item.setText("Failed")
+                    item.setBackground(self.failed_color)
+                    item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsUserCheckable)
+                    self.plugin_pipeline.blockSignals(False)
+                elif not plugin_active and not plugin_failed and current_text == "Active":
+                    self.plugin_pipeline.blockSignals(True)
+                    item.setText("Paused")
+                    item.setCheckState(Qt.CheckState.Unchecked)
+                    item.setBackground(self.paused_color)
+                    self.plugin_pipeline.blockSignals(False)
 
     def populate_camera_stats(self):
         self.cam_stats.setRowCount(len(self.cameras))
@@ -324,9 +368,11 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
                 if widget is not None:  # Active
                     plugin_active = None
+                    plugin_failed = False
                     for plugin in widget.plugins:  # Find plugin by name
                         if isinstance(plugin, self.plugins[plugin_name]):
                             plugin_active = plugin.active
+                            plugin_failed = getattr(plugin, 'failed', False)
                             break
 
                     if not widget.active:
@@ -340,6 +386,9 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                         item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
                         item.setCheckState(Qt.CheckState.Checked)
                         item.setBackground(self.active_color)
+                    elif plugin_failed:
+                        item.setText("Failed")
+                        item.setBackground(self.failed_color)
                     else:
                         item.setText("Paused")
                         item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
@@ -407,8 +456,16 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                 item.setText("Disabled")
                 item.setBackground(self.inactive_color)
 
-    # def sync_trigger_checkbox(self, item):
-    #     pass
+    def _on_plugin_failed(self, camera_name, plugin_name):
+        """Show a warning dialog when a plugin is deactivated due to errors."""
+        QtWidgets.QMessageBox.warning(
+            self,
+            "Plugin Failed",
+            f"Plugin '{plugin_name}' has been deactivated due to repeated errors "
+            f"on camera '{camera_name}'.\n\n"
+            f"If this is VideoWriter, video is NOT being saved.\n"
+            f"Check the log for details.",
+        )
 
     def populate_trigger_list(self):
         def sync_check_box(item):
@@ -590,6 +647,8 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                 widget.pipeline_initialized.connect(
                     lambda item=cam_item: item.setBackground(self.active_color)
                 )
+
+                widget.plugin_failed.connect(self._on_plugin_failed)
 
                 widget.destroyed.connect(
                     lambda _, id=camID, item=cam_item: reset_interface(id, item)

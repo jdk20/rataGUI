@@ -20,6 +20,7 @@ def plugin(mock_cam_widget, mock_config_manager):
 class TestBasePluginInit:
     def test_defaults(self, plugin):
         assert plugin.active is True
+        assert plugin.failed is False
         assert plugin.blocking is False
         assert plugin.independent is False
         assert plugin.drop_policy == "block"

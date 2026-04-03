@@ -515,7 +515,15 @@ class PipelineRunner:
                         ctx.camera.getDisplayName(),
                         ctx.camera.frames_acquired,
                     )
+                    plugin.failed = True
                     plugin.active = False
+                    logger.warning(
+                        "Plugin %s has been deactivated due to repeated failures. "
+                        "If this is VideoWriter, video is NOT being saved! "
+                        "Camera: %s",
+                        type(plugin).__name__,
+                        ctx.camera.getDisplayName(),
+                    )
                     plugin.close()
             finally:
                 if ring_buffer is not None and slot_idx is not None:

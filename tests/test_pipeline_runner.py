@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import logging
 import os
 from unittest.mock import MagicMock, patch
 
@@ -218,3 +219,62 @@ class TestPipelineRunnerLifecycle:
             BaseCamera.modules.pop("FanOutCam", None)
             BasePlugin.modules.pop("PluginA", None)
             BasePlugin.modules.pop("PluginB", None)
+
+
+class TestPluginFailureDeactivation:
+
+    @pytest.mark.asyncio
+    async def test_plugin_marked_failed_after_threshold(self, tmp_path):
+        """A plugin that always raises is marked failed=True after exceeding failure threshold."""
+        MockCamera = _make_camera_cls(num_cameras=1, num_frames=10)
+
+        from rataGUI.plugins.base_plugin import BasePlugin
+
+        class FailingPlugin(BasePlugin):
+            def __init__(self, cam_widget, config, queue_size=0):
+                super().__init__(cam_widget, config, queue_size)
+
+            def process(self, frame, metadata):
+                raise RuntimeError("simulated failure")
+
+        FailingPlugin.__name__ = "FailingPlugin"
+        FailingPlugin.__qualname__ = "FailingPlugin"
+
+        from rataGUI.cameras.BaseCamera import BaseCamera
+
+        BaseCamera.modules["FailCam"] = MockCamera
+        BasePlugin.modules["FailingPlugin"] = FailingPlugin
+
+        try:
+            config = {
+                "Enabled Camera Modules": ["FailCam"],
+                "Enabled Plugin Modules": ["FailingPlugin"],
+                "Enabled Trigger Modules": [],
+                "Save Directory": str(tmp_path),
+            }
+            runner = PipelineRunner(config)
+
+            # Capture warning logs directly (rataGUI logger has propagate=False)
+            runner_logger = logging.getLogger("rataGUI.headless.runner")
+            captured_warnings = []
+            handler = logging.Handler()
+            handler.setLevel(logging.WARNING)
+            handler.emit = lambda record: captured_warnings.append(record.getMessage())
+            runner_logger.addHandler(handler)
+
+            try:
+                await runner.run()
+            finally:
+                runner_logger.removeHandler(handler)
+
+            # Find the plugin instance from the runner's contexts
+            ctx = runner._contexts[0]
+            plugin = ctx.plugins[0]
+            assert plugin.failed is True
+            assert plugin.active is False
+
+            # Verify warning log was emitted
+            assert any("deactivated due to repeated failures" in m for m in captured_warnings)
+        finally:
+            BaseCamera.modules.pop("FailCam", None)
+            BasePlugin.modules.pop("FailingPlugin", None)
