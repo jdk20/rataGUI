@@ -30,7 +30,7 @@ pytest tests/test_video_writer.py::TestConfigureNvenc  # Single class
 pytest tests/test_video_writer.py::TestConfigureNvenc::test_success  # Single test
 ```
 
-Tests run headlessly — PyQt6 is mocked in `tests/conftest.py` before any rataGUI imports. No display or Qt installation required. Some integration tests (e.g., `TestVideoIntegrity`) require ffmpeg on PATH and are skipped if unavailable.
+Tests run headlessly — PyQt6 is mocked in `tests/conftest.py` before any rataGUI imports. No display or Qt installation required. Some integration tests (e.g., `TestVideoIntegrity`) require ffmpeg on PATH and are skipped if unavailable. The tests run fast so only sleep for 10 seconds before checking the tests, if there are still running sleep for another 5 seconds.
 
 ## Architecture
 
