@@ -278,3 +278,59 @@ class TestPluginFailureDeactivation:
         finally:
             BaseCamera.modules.pop("FailCam", None)
             BasePlugin.modules.pop("FailingPlugin", None)
+
+    @pytest.mark.asyncio
+    async def test_plugin_init_failure_logged_as_warning(self, tmp_path):
+        """A plugin that fails during init appears in failed_plugins with a WARNING log."""
+        MockCamera = _make_camera_cls(num_cameras=1, num_frames=3)
+        OkPlugin = _make_plugin_cls("OkPlugin")
+
+        from rataGUI.plugins.base_plugin import BasePlugin
+
+        class InitFailPlugin(BasePlugin):
+            def __init__(self, cam_widget, config, queue_size=0):
+                raise RuntimeError("init explosion")
+
+            def process(self, frame, metadata):
+                return frame, metadata
+
+        InitFailPlugin.__name__ = "InitFailPlugin"
+        InitFailPlugin.__qualname__ = "InitFailPlugin"
+
+        from rataGUI.cameras.BaseCamera import BaseCamera
+
+        BaseCamera.modules["InitFailCam"] = MockCamera
+        BasePlugin.modules["InitFailPlugin"] = InitFailPlugin
+        BasePlugin.modules["OkPlugin"] = OkPlugin
+
+        try:
+            config = {
+                "Enabled Camera Modules": ["InitFailCam"],
+                "Enabled Plugin Modules": ["InitFailPlugin", "OkPlugin"],
+                "Enabled Trigger Modules": [],
+                "Save Directory": str(tmp_path),
+            }
+            runner = PipelineRunner(config)
+
+            # Capture warning logs directly (rataGUI logger has propagate=False)
+            runner_logger = logging.getLogger("rataGUI.headless.runner")
+            captured_warnings = []
+            handler = logging.Handler()
+            handler.setLevel(logging.WARNING)
+            handler.emit = lambda record: captured_warnings.append(record.getMessage())
+            runner_logger.addHandler(handler)
+
+            try:
+                await runner.run()
+            finally:
+                runner_logger.removeHandler(handler)
+
+            ctx = runner._contexts[0]
+            assert "InitFailPlugin" in ctx.failed_plugins
+            assert len(ctx.plugins) == 1  # Only OkPlugin survived
+
+            assert any("failed to initialize" in m for m in captured_warnings)
+        finally:
+            BaseCamera.modules.pop("InitFailCam", None)
+            BasePlugin.modules.pop("InitFailPlugin", None)
+            BasePlugin.modules.pop("OkPlugin", None)

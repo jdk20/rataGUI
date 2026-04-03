@@ -138,6 +138,11 @@ class CameraWidget(QtWidgets.QWidget, Ui_CameraWidget):
             self.camera._running = True
             self.camera.frames_acquired = 0
             self.pipeline_initialized.emit()
+            for plugin_name in self.failed_plugins:
+                self.plugin_failed.emit(
+                    self.camera.getDisplayName(),
+                    plugin_name,
+                )
             logger.info(
                 "Started pipeline for camera: {}".format(self.camera.getDisplayName())
             )
@@ -208,6 +213,11 @@ class CameraWidget(QtWidgets.QWidget, Ui_CameraWidget):
             self.camera._running = True
             self.camera.frames_acquired = 0
             self.pipeline_initialized.emit()
+            for plugin_name in self.failed_plugins:
+                self.plugin_failed.emit(
+                    self.camera.getDisplayName(),
+                    plugin_name,
+                )
             logger.info("Camera subprocess ready for %s", self.camera.getDisplayName())
 
             # Run plugin pipeline with multiprocess acquisition

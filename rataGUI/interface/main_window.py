@@ -209,6 +209,14 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                         break
 
                 if plugin_active is None:
+                    # Check if this plugin failed during initialization
+                    current_text = item.text()
+                    if plugin_name in getattr(widget, 'failed_plugins', {}) and current_text != "Failed":
+                        self.plugin_pipeline.blockSignals(True)
+                        item.setText("Failed")
+                        item.setBackground(self.failed_color)
+                        item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsUserCheckable)
+                        self.plugin_pipeline.blockSignals(False)
                     continue
 
                 current_text = item.text()
@@ -452,8 +460,12 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                         item.setText("Paused")
                         item.setBackground(self.paused_color)
                     elif plugin_active is None:
-                        item.setText("Inactive")
-                        item.setBackground(self.inactive_color)
+                        if plugin_name in getattr(widget, 'failed_plugins', {}):
+                            item.setText("Failed")
+                            item.setBackground(self.failed_color)
+                        else:
+                            item.setText("Inactive")
+                            item.setBackground(self.inactive_color)
                     elif plugin_active:
                         item.setText("Active")
                         item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)

@@ -196,6 +196,13 @@ class PipelineRunner:
                         display_name,
                         err,
                     )
+                    logger.warning(
+                        "Plugin %s failed to initialize and will not run. "
+                        "If this is VideoWriter, video will NOT be saved! "
+                        "Camera: %s",
+                        pcls.__name__,
+                        display_name,
+                    )
 
             if not ctx.plugins:
                 logger.warning("No plugins for camera %s — skipping", display_name)
