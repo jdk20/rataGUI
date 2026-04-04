@@ -18,7 +18,6 @@ def _make_camera(display_name="TestCam"):
 
 
 class TestPipelineContext:
-
     def test_attributes(self, tmp_path):
         camera = _make_camera()
         config = HeadlessConfigManager({"fps": 30})

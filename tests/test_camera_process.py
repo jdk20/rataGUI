@@ -1,5 +1,5 @@
 import sys
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 # Mock PyQt6 and pyqtconfig before any rataGUI imports
 _qt_modules = ["PyQt6", "PyQt6.QtCore", "PyQt6.QtGui", "PyQt6.QtWidgets", "pyqtconfig"]
@@ -18,6 +18,7 @@ from rataGUI.cameras.BaseCamera import BaseCamera
 
 
 # --- Concrete test camera that records calls --------------------------------
+
 
 class _MockCamera(BaseCamera):
     """Minimal concrete camera for testing the acquisition loop."""
@@ -53,9 +54,16 @@ class _MockCamera(BaseCamera):
 class TestCameraAcquisitionLoop:
     """Tests for rataGUI.camera_process.camera_acquisition_loop."""
 
-    def _run_loop(self, camera_module_name="test_camera_process", camera_id="test-cam",
-                  config_dict=None, plugin_names=None, num_slots=4,
-                  frame_shape=(480, 640, 3), timeout=10):
+    def _run_loop(
+        self,
+        camera_module_name="test_camera_process",
+        camera_id="test-cam",
+        config_dict=None,
+        plugin_names=None,
+        num_slots=4,
+        frame_shape=(480, 640, 3),
+        timeout=10,
+    ):
         """Helper that runs camera_acquisition_loop in a thread and returns results."""
         from multiprocessing.shared_memory import SharedMemory
         from rataGUI.camera_process import camera_acquisition_loop
@@ -264,5 +272,7 @@ class TestBaseCameraCreateAndInitialize:
     def test_config_dict_passed_correctly(self):
         _MockCamera._init_should_fail = False
         config_dict = {"Framerate": 60, "Gain": 10}
-        camera = _MockCamera.create_and_initialize("test-cam", config_dict, ["VideoWriter"])
+        camera = _MockCamera.create_and_initialize(
+            "test-cam", config_dict, ["VideoWriter"]
+        )
         assert camera._running is True

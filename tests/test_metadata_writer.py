@@ -1,31 +1,34 @@
 import os
 import pytest
 import numpy as np
-from unittest.mock import MagicMock, patch
-from datetime import datetime
+from unittest.mock import patch
 from rataGUI.plugins.metadata_writer import MetadataWriter
 
 
 @pytest.fixture
 def writer_config_all_off(mock_config_manager):
-    return mock_config_manager({
-        "Overlay Frame Index": False,
-        "Abbreviate": False,
-        "Overlay Timestamp": False,
-        "Include date": False,
-        "Overlay Camera Name": False,
-    })
+    return mock_config_manager(
+        {
+            "Overlay Frame Index": False,
+            "Abbreviate": False,
+            "Overlay Timestamp": False,
+            "Include date": False,
+            "Overlay Camera Name": False,
+        }
+    )
 
 
 @pytest.fixture
 def writer_config_all_on(mock_config_manager):
-    return mock_config_manager({
-        "Overlay Frame Index": True,
-        "Abbreviate": False,
-        "Overlay Timestamp": True,
-        "Include date": False,
-        "Overlay Camera Name": True,
-    })
+    return mock_config_manager(
+        {
+            "Overlay Frame Index": True,
+            "Abbreviate": False,
+            "Overlay Timestamp": True,
+            "Include date": False,
+            "Overlay Camera Name": True,
+        }
+    )
 
 
 @pytest.fixture
@@ -60,28 +63,39 @@ class TestMetadataWriterProcess:
             lines = f.readlines()
         assert len(lines) == 2
 
-    def test_no_overlay_returns_frame(self, metadata_writer, sample_frame, sample_metadata):
-        original = sample_frame.copy()
-        result_frame, result_metadata = metadata_writer.process(sample_frame, sample_metadata)
+    def test_no_overlay_returns_frame(
+        self, metadata_writer, sample_frame, sample_metadata
+    ):
+        result_frame, result_metadata = metadata_writer.process(
+            sample_frame, sample_metadata
+        )
 
         assert result_metadata is sample_metadata
         assert isinstance(result_frame, np.ndarray)
 
     @patch("rataGUI.plugins.metadata_writer.cv2")
-    def test_overlay_frame_index(self, mock_cv2, mock_cam_widget, mock_config_manager,
-                                  sample_frame, sample_metadata):
+    def test_overlay_frame_index(
+        self,
+        mock_cv2,
+        mock_cam_widget,
+        mock_config_manager,
+        sample_frame,
+        sample_metadata,
+    ):
         mock_cv2.getTextSize.return_value = ((100, 20), 0)
         mock_cv2.FONT_HERSHEY_SIMPLEX = 0
         mock_cv2.LINE_4 = 4
         mock_cv2.FILLED = -1
 
-        config = mock_config_manager({
-            "Overlay Frame Index": True,
-            "Abbreviate": False,
-            "Overlay Timestamp": False,
-            "Include date": False,
-            "Overlay Camera Name": False,
-        })
+        config = mock_config_manager(
+            {
+                "Overlay Frame Index": True,
+                "Abbreviate": False,
+                "Overlay Timestamp": False,
+                "Include date": False,
+                "Overlay Camera Name": False,
+            }
+        )
         writer = MetadataWriter(mock_cam_widget, config)
         writer.process(sample_frame, sample_metadata)
 
@@ -90,20 +104,28 @@ class TestMetadataWriterProcess:
         assert "Frame Index" in call_args[0][1]
 
     @patch("rataGUI.plugins.metadata_writer.cv2")
-    def test_overlay_timestamp_without_date(self, mock_cv2, mock_cam_widget,
-                                             mock_config_manager, sample_frame, sample_metadata):
+    def test_overlay_timestamp_without_date(
+        self,
+        mock_cv2,
+        mock_cam_widget,
+        mock_config_manager,
+        sample_frame,
+        sample_metadata,
+    ):
         mock_cv2.getTextSize.return_value = ((100, 20), 0)
         mock_cv2.FONT_HERSHEY_SIMPLEX = 0
         mock_cv2.LINE_4 = 4
         mock_cv2.FILLED = -1
 
-        config = mock_config_manager({
-            "Overlay Frame Index": False,
-            "Abbreviate": False,
-            "Overlay Timestamp": True,
-            "Include date": False,
-            "Overlay Camera Name": False,
-        })
+        config = mock_config_manager(
+            {
+                "Overlay Frame Index": False,
+                "Abbreviate": False,
+                "Overlay Timestamp": True,
+                "Include date": False,
+                "Overlay Camera Name": False,
+            }
+        )
         writer = MetadataWriter(mock_cam_widget, config)
         writer.process(sample_frame, sample_metadata)
 
@@ -114,20 +136,28 @@ class TestMetadataWriterProcess:
         assert "/" not in overlay_text
 
     @patch("rataGUI.plugins.metadata_writer.cv2")
-    def test_overlay_timestamp_with_date(self, mock_cv2, mock_cam_widget,
-                                          mock_config_manager, sample_frame, sample_metadata):
+    def test_overlay_timestamp_with_date(
+        self,
+        mock_cv2,
+        mock_cam_widget,
+        mock_config_manager,
+        sample_frame,
+        sample_metadata,
+    ):
         mock_cv2.getTextSize.return_value = ((100, 20), 0)
         mock_cv2.FONT_HERSHEY_SIMPLEX = 0
         mock_cv2.LINE_4 = 4
         mock_cv2.FILLED = -1
 
-        config = mock_config_manager({
-            "Overlay Frame Index": False,
-            "Abbreviate": False,
-            "Overlay Timestamp": True,
-            "Include date": True,
-            "Overlay Camera Name": False,
-        })
+        config = mock_config_manager(
+            {
+                "Overlay Frame Index": False,
+                "Abbreviate": False,
+                "Overlay Timestamp": True,
+                "Include date": True,
+                "Overlay Camera Name": False,
+            }
+        )
         writer = MetadataWriter(mock_cam_widget, config)
         writer.process(sample_frame, sample_metadata)
 
@@ -137,20 +167,28 @@ class TestMetadataWriterProcess:
         assert "/" in overlay_text
 
     @patch("rataGUI.plugins.metadata_writer.cv2")
-    def test_abbreviate_names(self, mock_cv2, mock_cam_widget,
-                               mock_config_manager, sample_frame, sample_metadata):
+    def test_abbreviate_names(
+        self,
+        mock_cv2,
+        mock_cam_widget,
+        mock_config_manager,
+        sample_frame,
+        sample_metadata,
+    ):
         mock_cv2.getTextSize.return_value = ((100, 20), 0)
         mock_cv2.FONT_HERSHEY_SIMPLEX = 0
         mock_cv2.LINE_4 = 4
         mock_cv2.FILLED = -1
 
-        config = mock_config_manager({
-            "Overlay Frame Index": True,
-            "Abbreviate": True,
-            "Overlay Timestamp": False,
-            "Include date": False,
-            "Overlay Camera Name": False,
-        })
+        config = mock_config_manager(
+            {
+                "Overlay Frame Index": True,
+                "Abbreviate": True,
+                "Overlay Timestamp": False,
+                "Include date": False,
+                "Overlay Camera Name": False,
+            }
+        )
         writer = MetadataWriter(mock_cam_widget, config)
         writer.process(sample_frame, sample_metadata)
 

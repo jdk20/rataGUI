@@ -211,7 +211,10 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                 if plugin_active is None:
                     # Check if this plugin failed during initialization
                     current_text = item.text()
-                    if plugin_name in getattr(widget, 'failed_plugins', {}) and current_text != "Failed":
+                    if (
+                        plugin_name in getattr(widget, "failed_plugins", {})
+                        and current_text != "Failed"
+                    ):
                         self.plugin_pipeline.blockSignals(True)
                         item.setText("Failed")
                         item.setBackground(self.failed_color)
@@ -511,7 +514,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                         item.setText("Paused")
                         item.setBackground(self.paused_color)
                     elif plugin_active is None:
-                        if plugin_name in getattr(widget, 'failed_plugins', {}):
+                        if plugin_name in getattr(widget, "failed_plugins", {}):
                             item.setText("Failed")
                             item.setBackground(self.failed_color)
                         else:

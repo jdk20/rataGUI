@@ -1,4 +1,3 @@
-import pytest
 from unittest.mock import patch, MagicMock
 from rataGUI.triggers.udp_socket import UDPSocket
 
@@ -51,9 +50,7 @@ class TestUDPSocketExecute:
 
         trigger.execute("hello")
 
-        trigger._socket.sendto.assert_called_once_with(
-            b"hello", ("127.0.0.1", 1234)
-        )
+        trigger._socket.sendto.assert_called_once_with(b"hello", ("127.0.0.1", 1234))
 
     def test_execute_not_initialized(self):
         trigger = UDPSocket("device0")

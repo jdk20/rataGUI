@@ -5,9 +5,7 @@ import pytest
 from rataGUI.plugins.video_codec_rules import (
     NVENC_CODECS,
     NVENC_ONLY_KEYS,
-    B_FRAMES_CODECS,
     PRESETS_BY_CODEC,
-    PIXEL_FORMATS_BY_CODEC,
     get_hidden_keys,
     get_valid_presets,
     get_valid_pixel_formats,
@@ -68,8 +66,13 @@ class TestGetHiddenKeys:
 
     def test_universal_keys_never_hidden(self):
         """framerate, buffer size, save dir, etc. should never be hidden."""
-        universal = {"framerate", "Write Frame Index", "Buffer Size (frames)",
-                     "Save directory", "filename suffix"}
+        universal = {
+            "framerate",
+            "Write Frame Index",
+            "Buffer Size (frames)",
+            "Save directory",
+            "filename suffix",
+        }
         for codec in PRESETS_BY_CODEC:
             hidden = get_hidden_keys(codec)
             assert hidden.isdisjoint(universal), f"{codec} hides universal keys"
@@ -144,19 +147,25 @@ class TestGetValidPixelFormats:
 
 class TestValidateConfig:
     def test_valid_libx264_config(self):
-        errors = validate_config("libx264", {
-            "speed (preset)": "medium",
-            "pixel format": "yuv420p",
-        })
+        errors = validate_config(
+            "libx264",
+            {
+                "speed (preset)": "medium",
+                "pixel format": "yuv420p",
+            },
+        )
         assert errors == []
 
     def test_valid_nvenc_config(self):
-        errors = validate_config("h264_nvenc", {
-            "speed (preset)": "p4",
-            "pixel format": "yuv420p",
-            "Rate Control": "constqp",
-            "B-Frames": 2,
-        })
+        errors = validate_config(
+            "h264_nvenc",
+            {
+                "speed (preset)": "p4",
+                "pixel format": "yuv420p",
+                "Rate Control": "constqp",
+                "B-Frames": 2,
+            },
+        )
         assert errors == []
 
     def test_rate_control_invalid_for_libx264(self):
@@ -204,16 +213,23 @@ class TestValidateConfig:
 
     def test_strict_raises_on_first_error(self):
         with pytest.raises(ValueError):
-            validate_config("libx264", {
-                "Rate Control": "cbr",
-                "speed (preset)": "p4",
-            }, strict=True)
+            validate_config(
+                "libx264",
+                {
+                    "Rate Control": "cbr",
+                    "speed (preset)": "p4",
+                },
+                strict=True,
+            )
 
     def test_non_strict_returns_all_errors(self):
-        errors = validate_config("libx264", {
-            "Rate Control": "cbr",
-            "speed (preset)": "p4",
-        })
+        errors = validate_config(
+            "libx264",
+            {
+                "Rate Control": "cbr",
+                "speed (preset)": "p4",
+            },
+        )
         assert len(errors) == 2
 
     def test_only_user_provided_keys_checked(self):

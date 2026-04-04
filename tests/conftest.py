@@ -49,10 +49,12 @@ def mock_cam_widget(tmp_path):
 @pytest.fixture
 def mock_config_manager():
     """Factory fixture to create a mock ConfigManager with a given config dict."""
+
     def _make(config_dict):
         config = MagicMock()
         config.as_dict.return_value = dict(config_dict)
         config.get.side_effect = lambda key, default=None: config_dict.get(key, default)
         config.set = MagicMock()
         return config
+
     return _make

@@ -2,7 +2,6 @@ import threading
 import time
 
 import numpy as np
-import pytest
 
 from rataGUI.frame_ring_buffer import FrameRingBuffer
 

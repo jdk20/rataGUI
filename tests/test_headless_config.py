@@ -4,7 +4,6 @@ from rataGUI.headless.context import HeadlessConfigManager
 
 
 class TestHeadlessConfigManager:
-
     def test_get_set(self):
         config = HeadlessConfigManager({"key": "value"})
         assert config.get("key") == "value"

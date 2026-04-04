@@ -1,4 +1,4 @@
-from PyQt6.QtCore import QRect, QPoint, Qt
+from PyQt6.QtCore import QRect, QPoint
 from PyQt6.QtWidgets import QTabWidget, QTabBar, QStylePainter, QStyleOptionTab, QStyle
 
 

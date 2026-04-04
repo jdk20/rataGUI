@@ -4,11 +4,10 @@ Validates the QImage use-after-free fix (QImage.copy()), concurrent
 fan_out behaviour with mixed blocking/non-blocking plugins, and video
 file integrity via the real ffmpeg binary.
 """
+
 import asyncio
 import os
 import sys
-import threading
-import time
 from shutil import which
 from unittest.mock import MagicMock, patch
 
@@ -21,6 +20,7 @@ from rataGUI.frame_ring_buffer import FrameRingBuffer
 # ---------------------------------------------------------------------------
 # Helpers (replicated from test_fan_out.py to keep tests self-contained)
 # ---------------------------------------------------------------------------
+
 
 def _make_plugin(blocking=False, independent=True, queue_size=5, drop_policy="block"):
     """Create a minimal mock plugin with real asyncio queues."""
@@ -64,19 +64,20 @@ async def fan_out(source_queue, target_plugins, ring_buffer=None):
                         frame_copy = view.copy()
                         ring_buffer.release(slot_idx)
                         await _put_to_queue(
-                            plugin.in_queue, (frame_copy, meta),
+                            plugin.in_queue,
+                            (frame_copy, meta),
                             plugin.drop_policy,
                         )
                     else:
                         await _put_to_queue(
-                            plugin.in_queue, slot_idx, plugin.drop_policy,
+                            plugin.in_queue,
+                            slot_idx,
+                            plugin.drop_policy,
                             ring_buffer=ring_buffer,
                         )
             else:
                 for plugin in target_plugins:
-                    await _put_to_queue(
-                        plugin.in_queue, item, plugin.drop_policy
-                    )
+                    await _put_to_queue(plugin.in_queue, item, plugin.drop_policy)
         finally:
             source_queue.task_done()
 
@@ -98,6 +99,7 @@ async def _run_fan_out_n(fan_out_coro, source_queue, n_items, timeout=5.0):
 # ---------------------------------------------------------------------------
 # Tests: QImage data ownership (validates the .copy() fix)
 # ---------------------------------------------------------------------------
+
 
 class TestQImageDataOwnership:
     """Verify that QImage.copy() produces data independent of the ring buffer."""
@@ -166,6 +168,7 @@ class TestQImageDataOwnership:
 # Tests: Concurrent fan_out with blocking + non-blocking plugins
 # ---------------------------------------------------------------------------
 
+
 class TestConcurrentFanOutBothPlugins:
     """Validate fan_out + plugin_process with both plugin types simultaneously."""
 
@@ -185,7 +188,8 @@ class TestConcurrentFanOutBothPlugins:
 
         await _run_fan_out_n(
             fan_out(source, [blocking, nonblocking], ring_buffer=ring),
-            source, n_frames,
+            source,
+            n_frames,
         )
 
         assert blocking.in_queue.qsize() == n_frames
@@ -206,7 +210,8 @@ class TestConcurrentFanOutBothPlugins:
 
         await _run_fan_out_n(
             fan_out(source, [blocking, nonblocking], ring_buffer=ring),
-            source, 1,
+            source,
+            1,
         )
 
         # Blocking plugin's ref was released in fan_out; non-blocking still holds
@@ -230,7 +235,8 @@ class TestConcurrentFanOutBothPlugins:
 
         await _run_fan_out_n(
             fan_out(source, [blocking, nonblocking], ring_buffer=ring),
-            source, 1,
+            source,
+            1,
         )
 
         item = blocking.in_queue.get_nowait()
@@ -253,7 +259,8 @@ class TestConcurrentFanOutBothPlugins:
 
         await _run_fan_out_n(
             fan_out(source, [blocking, nonblocking], ring_buffer=ring),
-            source, 1,
+            source,
+            1,
         )
 
         item = nonblocking.in_queue.get_nowait()
@@ -317,6 +324,7 @@ class TestConcurrentFanOutBothPlugins:
 # Tests: Video file integrity via real ffmpeg
 # ---------------------------------------------------------------------------
 
+
 def _find_ffmpeg():
     """Locate ffmpeg: check PATH first, then the conda environment's Library/bin."""
     path = which("ffmpeg")
@@ -339,6 +347,7 @@ class TestVideoIntegrity:
     def _make_writer(self, file_path, codec="libx264", framerate=30, buffer_size=60):
         """Create an FFMPEG_Writer with reasonable test defaults."""
         from rataGUI.plugins.video_writer import FFMPEG_Writer
+
         # Patch which() so FFMPEG_Writer finds the conda env's ffmpeg
         with patch("rataGUI.plugins.video_writer.which", return_value=_FFMPEG_PATH):
             return FFMPEG_Writer(
@@ -364,6 +373,7 @@ class TestVideoIntegrity:
     def test_ffmpeg_writer_produces_valid_video(self, tmp_path):
         """Write 30 frames, verify file exists, frame count, and dimensions."""
         import cv2
+
         n_frames = 30
         h, w = 120, 160
 
@@ -388,13 +398,16 @@ class TestVideoIntegrity:
             # Verify dimensions of first frame
             ret, frame = cap.read()
             assert ret, "Failed to read first frame"
-            assert frame.shape[:2] == (h, w), f"Expected {(h, w)}, got {frame.shape[:2]}"
+            assert frame.shape[:2] == (h, w), (
+                f"Expected {(h, w)}, got {frame.shape[:2]}"
+            )
         finally:
             cap.release()
 
     def test_ffmpeg_writer_frame_content_integrity(self, tmp_path):
         """Write known patterns, read back, verify within lossy tolerance."""
         import cv2
+
         n_frames = 10
         h, w = 120, 160
 
@@ -427,6 +440,7 @@ class TestVideoIntegrity:
     def test_ffmpeg_writer_close_flushes_all_frames(self, tmp_path):
         """Closing the writer must flush all queued frames to the output."""
         import cv2
+
         n_frames = 50
         h, w = 60, 80
 

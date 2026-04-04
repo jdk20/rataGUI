@@ -4,8 +4,8 @@ Validates that the circular queue bug (where fan_out wrote items back
 into its own source queue) is fixed, and that blocking/non-blocking
 plugins receive the correct item types through the ring buffer path.
 """
+
 import asyncio
-import sys
 from unittest.mock import MagicMock
 
 import numpy as np
@@ -17,6 +17,7 @@ from rataGUI.frame_ring_buffer import FrameRingBuffer
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_plugin(blocking=False, independent=True, queue_size=5, drop_policy="block"):
     """Create a minimal mock plugin with real asyncio queues."""
@@ -52,6 +53,7 @@ async def _run_fan_out_once(fan_out_coro, source_queue, timeout=2.0):
 # we replicate the relevant methods directly.
 # ---------------------------------------------------------------------------
 
+
 async def _put_to_queue(target_queue, item, drop_policy="block", ring_buffer=None):
     """Replica of CameraWidget._put_to_queue for testing."""
     if drop_policy == "drop_oldest" and target_queue.full():
@@ -82,19 +84,20 @@ async def fan_out(source_queue, target_plugins, ring_buffer=None):
                         frame_copy = view.copy()
                         ring_buffer.release(slot_idx)
                         await _put_to_queue(
-                            plugin.in_queue, (frame_copy, meta),
+                            plugin.in_queue,
+                            (frame_copy, meta),
                             plugin.drop_policy,
                         )
                     else:
                         await _put_to_queue(
-                            plugin.in_queue, slot_idx, plugin.drop_policy,
+                            plugin.in_queue,
+                            slot_idx,
+                            plugin.drop_policy,
                             ring_buffer=ring_buffer,
                         )
             else:
                 for plugin in target_plugins:
-                    await _put_to_queue(
-                        plugin.in_queue, item, plugin.drop_policy
-                    )
+                    await _put_to_queue(plugin.in_queue, item, plugin.drop_policy)
         finally:
             source_queue.task_done()
 
@@ -102,6 +105,7 @@ async def fan_out(source_queue, target_plugins, ring_buffer=None):
 # ---------------------------------------------------------------------------
 # Tests: Circular queue regression
 # ---------------------------------------------------------------------------
+
 
 class TestCircularQueueRegression:
     """Ensure fan_out never writes back into its own source queue."""
@@ -156,6 +160,7 @@ class TestCircularQueueRegression:
 # Tests: Item types delivered to blocking vs non-blocking plugins
 # ---------------------------------------------------------------------------
 
+
 class TestFanOutItemTypes:
     """Verify blocking plugins receive (frame, metadata) tuples and
     non-blocking plugins receive slot indices (int)."""
@@ -173,7 +178,11 @@ class TestFanOutItemTypes:
         await source_queue.put((frame, metadata))
 
         await _run_fan_out_once(
-            fan_out(source_queue, [blocking_plugin, nonblocking_plugin], ring_buffer=ring_buffer),
+            fan_out(
+                source_queue,
+                [blocking_plugin, nonblocking_plugin],
+                ring_buffer=ring_buffer,
+            ),
             source_queue,
         )
 
@@ -198,7 +207,11 @@ class TestFanOutItemTypes:
         await source_queue.put((frame, metadata))
 
         await _run_fan_out_once(
-            fan_out(source_queue, [blocking_plugin, nonblocking_plugin], ring_buffer=ring_buffer),
+            fan_out(
+                source_queue,
+                [blocking_plugin, nonblocking_plugin],
+                ring_buffer=ring_buffer,
+            ),
             source_queue,
         )
 
@@ -209,6 +222,7 @@ class TestFanOutItemTypes:
 # ---------------------------------------------------------------------------
 # Tests: Ring buffer ref-count accounting
 # ---------------------------------------------------------------------------
+
 
 class TestFanOutRefCounts:
     """Verify ring buffer ref-counts are correctly managed after fan_out."""
@@ -226,7 +240,11 @@ class TestFanOutRefCounts:
         await source_queue.put((frame, {"i": 0}))
 
         await _run_fan_out_once(
-            fan_out(source_queue, [blocking_plugin, nonblocking_plugin], ring_buffer=ring_buffer),
+            fan_out(
+                source_queue,
+                [blocking_plugin, nonblocking_plugin],
+                ring_buffer=ring_buffer,
+            ),
             source_queue,
         )
 
@@ -258,6 +276,7 @@ class TestFanOutRefCounts:
 # ---------------------------------------------------------------------------
 # Tests: fan_out without ring buffer (fallback path)
 # ---------------------------------------------------------------------------
+
 
 class TestFanOutNoRingBuffer:
     """Verify fan_out works correctly without a ring buffer."""

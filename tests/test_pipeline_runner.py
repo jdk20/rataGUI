@@ -3,13 +3,10 @@
 import asyncio
 import json
 import logging
-import os
-from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
 
-from rataGUI.headless.context import HeadlessConfigManager
 from rataGUI.headless.runner import PipelineRunner
 
 
@@ -29,7 +26,7 @@ def _make_camera_cls(num_cameras=1, num_frames=3):
 
         @staticmethod
         def getAvailableCameras():
-            return [MockCamera(f"MockCam-{i+1}") for i in range(num_cameras)]
+            return [MockCamera(f"MockCam-{i + 1}") for i in range(num_cameras)]
 
         def getDisplayName(self):
             return self.display_name or str(self.cameraID)
@@ -82,14 +79,16 @@ def _make_plugin_cls(name="MockPlugin", blocking=False, independent=False):
 
 
 class TestPipelineRunnerInit:
-
     def test_accepts_dict(self):
         config = {"Enabled Camera Modules": [], "Save Directory": "/tmp/test"}
         runner = PipelineRunner(config)
         assert runner._config["Save Directory"] == "/tmp/test"
 
     def test_accepts_json_path(self, tmp_path):
-        config = {"Enabled Camera Modules": ["VideoReader"], "Save Directory": str(tmp_path)}
+        config = {
+            "Enabled Camera Modules": ["VideoReader"],
+            "Save Directory": str(tmp_path),
+        }
         config_path = tmp_path / "config.json"
         config_path.write_text(json.dumps(config))
         runner = PipelineRunner(str(config_path))
@@ -101,13 +100,11 @@ class TestPipelineRunnerInit:
 
 
 class TestPipelineRunnerExcludesFrameDisplay:
-
     def test_excluded_plugins_set(self):
         assert "FrameDisplay" in PipelineRunner.EXCLUDED_PLUGINS
 
 
 class TestPipelineRunnerLifecycle:
-
     @pytest.mark.asyncio
     async def test_single_camera_pipeline(self, tmp_path):
         """Run a pipeline with one mock camera and one mock plugin."""
@@ -222,7 +219,6 @@ class TestPipelineRunnerLifecycle:
 
 
 class TestPluginFailureDeactivation:
-
     @pytest.mark.asyncio
     async def test_plugin_marked_failed_after_threshold(self, tmp_path):
         """A plugin that always raises is marked failed=True after exceeding failure threshold."""
@@ -274,7 +270,9 @@ class TestPluginFailureDeactivation:
             assert plugin.active is False
 
             # Verify warning log was emitted
-            assert any("deactivated due to repeated failures" in m for m in captured_warnings)
+            assert any(
+                "deactivated due to repeated failures" in m for m in captured_warnings
+            )
         finally:
             BaseCamera.modules.pop("FailCam", None)
             BasePlugin.modules.pop("FailingPlugin", None)

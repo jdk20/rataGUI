@@ -21,34 +21,44 @@ B_FRAMES_CODECS = frozenset({"h264_nvenc", "hevc_nvenc"})
 # ---------------------------------------------------------------------------
 
 #: Keys that only make sense for NVENC codecs.
-NVENC_ONLY_KEYS = frozenset({
-    "Rate Control",
-    "Bitrate (Mbps)",
-    "GPU Index",
-    "Tune",
-    "GPU Pixel Conversion",
-})
+NVENC_ONLY_KEYS = frozenset(
+    {
+        "Rate Control",
+        "Bitrate (Mbps)",
+        "GPU Index",
+        "Tune",
+        "GPU Pixel Conversion",
+    }
+)
 
 #: Keys hidden when rawvideo is selected (essentially everything except
 #: framerate, buffer size, save directory, filename suffix, frame index).
-_RAWVIDEO_HIDDEN_KEYS = frozenset({
-    "speed (preset)",
-    "quality (0-51)",
-    "pixel format",
-    "Rate Control",
-    "Bitrate (Mbps)",
-    "GPU Index",
-    "B-Frames",
-    "Tune",
-    "GPU Pixel Conversion",
-})
+_RAWVIDEO_HIDDEN_KEYS = frozenset(
+    {
+        "speed (preset)",
+        "quality (0-51)",
+        "pixel format",
+        "Rate Control",
+        "Bitrate (Mbps)",
+        "GPU Index",
+        "B-Frames",
+        "Tune",
+        "GPU Pixel Conversion",
+    }
+)
 
 # ---------------------------------------------------------------------------
 # Valid presets per codec
 # ---------------------------------------------------------------------------
 
 _X264_PRESETS = [
-    "ultrafast", "veryfast", "fast", "medium", "slow", "slower", "veryslow",
+    "ultrafast",
+    "veryfast",
+    "fast",
+    "medium",
+    "slow",
+    "slower",
+    "veryslow",
 ]
 
 # Both P-series (SDK 10+) and legacy names are offered — the driver-dependent
@@ -56,18 +66,37 @@ _X264_PRESETS = [
 _NVENC_PRESETS = ["p1", "p2", "p3", "p4", "p5", "p6", "p7", "fast", "medium", "slow"]
 
 _SVTAV1_PRESETS = [
-    "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13",
-    "ultrafast", "veryfast", "fast", "medium", "slow", "slower", "veryslow",
+    "0",
+    "1",
+    "2",
+    "3",
+    "4",
+    "5",
+    "6",
+    "7",
+    "8",
+    "9",
+    "10",
+    "11",
+    "12",
+    "13",
+    "ultrafast",
+    "veryfast",
+    "fast",
+    "medium",
+    "slow",
+    "slower",
+    "veryslow",
 ]
 
 PRESETS_BY_CODEC: dict[str, list[str]] = {
-    "libx264":    _X264_PRESETS,
-    "libx265":    _X264_PRESETS,
+    "libx264": _X264_PRESETS,
+    "libx265": _X264_PRESETS,
     "h264_nvenc": _NVENC_PRESETS,
     "hevc_nvenc": _NVENC_PRESETS,
-    "av1_nvenc":  _NVENC_PRESETS,
-    "libsvtav1":  _SVTAV1_PRESETS,
-    "rawvideo":   [],
+    "av1_nvenc": _NVENC_PRESETS,
+    "libsvtav1": _SVTAV1_PRESETS,
+    "rawvideo": [],
 }
 
 # ---------------------------------------------------------------------------
@@ -75,20 +104,26 @@ PRESETS_BY_CODEC: dict[str, list[str]] = {
 # ---------------------------------------------------------------------------
 
 ALL_PIXEL_FORMATS = [
-    "yuv420p", "yuv422p", "yuv444p", "rgb24",
-    "yuv420p10le", "yuv422p10le", "yuv444p10le", "gray",
+    "yuv420p",
+    "yuv422p",
+    "yuv444p",
+    "rgb24",
+    "yuv420p10le",
+    "yuv422p10le",
+    "yuv444p10le",
+    "gray",
 ]
 
 NVENC_PIXEL_FORMATS = ["yuv420p", "nv12", "p010le", "yuv444p", "yuv444p16le"]
 
 PIXEL_FORMATS_BY_CODEC: dict[str, list[str]] = {
-    "libx264":    ALL_PIXEL_FORMATS,
-    "libx265":    ALL_PIXEL_FORMATS,
+    "libx264": ALL_PIXEL_FORMATS,
+    "libx265": ALL_PIXEL_FORMATS,
     "h264_nvenc": NVENC_PIXEL_FORMATS,
     "hevc_nvenc": NVENC_PIXEL_FORMATS,
-    "av1_nvenc":  NVENC_PIXEL_FORMATS,
-    "libsvtav1":  ALL_PIXEL_FORMATS,
-    "rawvideo":   [],
+    "av1_nvenc": NVENC_PIXEL_FORMATS,
+    "libsvtav1": ALL_PIXEL_FORMATS,
+    "rawvideo": [],
 }
 
 # ---------------------------------------------------------------------------

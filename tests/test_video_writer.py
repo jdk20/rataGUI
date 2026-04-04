@@ -2,8 +2,11 @@ import pytest
 from unittest.mock import patch, MagicMock
 import rataGUI.plugins.video_writer as vw_module
 from rataGUI.plugins.video_writer import (
-    VideoWriter, FFMPEG_Writer, _get_nvidia_driver_version,
-    _check_ffmpeg_encoder_available, _check_ffmpeg_cuda_available,
+    VideoWriter,
+    FFMPEG_Writer,
+    _get_nvidia_driver_version,
+    _check_ffmpeg_encoder_available,
+    _check_ffmpeg_cuda_available,
     _check_nvenc_new_presets_available,
 )
 
@@ -111,8 +114,14 @@ class TestConfigureNvenc:
             setattr(writer, k, v)
         return writer
 
-    @patch("rataGUI.plugins.video_writer._check_nvenc_new_presets_available", return_value=True)
-    @patch("rataGUI.plugins.video_writer._check_ffmpeg_encoder_available", return_value=True)
+    @patch(
+        "rataGUI.plugins.video_writer._check_nvenc_new_presets_available",
+        return_value=True,
+    )
+    @patch(
+        "rataGUI.plugins.video_writer._check_ffmpeg_encoder_available",
+        return_value=True,
+    )
     @patch("rataGUI.plugins.video_writer._get_nvidia_driver_version")
     def test_sdk10_legacy_preset_mapping(self, mock_driver, _mock_enc, _mock_presets):
         mock_driver.return_value = 535
@@ -123,7 +132,10 @@ class TestConfigureNvenc:
         VideoWriter._configure_nvenc(writer, "h264_nvenc", config)
         assert writer.output_params["-preset"] == "p1"
 
-    @patch("rataGUI.plugins.video_writer._check_ffmpeg_encoder_available", return_value=True)
+    @patch(
+        "rataGUI.plugins.video_writer._check_ffmpeg_encoder_available",
+        return_value=True,
+    )
     @patch("rataGUI.plugins.video_writer._get_nvidia_driver_version")
     def test_legacy_driver_new_preset_mapping(self, mock_driver, _mock_enc):
         mock_driver.return_value = 400  # old driver
@@ -134,8 +146,14 @@ class TestConfigureNvenc:
         VideoWriter._configure_nvenc(writer, "h264_nvenc", config)
         assert writer.output_params["-preset"] == "medium"
 
-    @patch("rataGUI.plugins.video_writer._check_nvenc_new_presets_available", return_value=True)
-    @patch("rataGUI.plugins.video_writer._check_ffmpeg_encoder_available", return_value=True)
+    @patch(
+        "rataGUI.plugins.video_writer._check_nvenc_new_presets_available",
+        return_value=True,
+    )
+    @patch(
+        "rataGUI.plugins.video_writer._check_ffmpeg_encoder_available",
+        return_value=True,
+    )
     @patch("rataGUI.plugins.video_writer._get_nvidia_driver_version")
     def test_rate_control_constqp(self, mock_driver, _mock_enc, _mock_presets):
         mock_driver.return_value = 535
@@ -149,8 +167,14 @@ class TestConfigureNvenc:
         assert writer.output_params["-cq"] == "28"
         assert "-crf" not in writer.output_params
 
-    @patch("rataGUI.plugins.video_writer._check_nvenc_new_presets_available", return_value=True)
-    @patch("rataGUI.plugins.video_writer._check_ffmpeg_encoder_available", return_value=True)
+    @patch(
+        "rataGUI.plugins.video_writer._check_nvenc_new_presets_available",
+        return_value=True,
+    )
+    @patch(
+        "rataGUI.plugins.video_writer._check_ffmpeg_encoder_available",
+        return_value=True,
+    )
     @patch("rataGUI.plugins.video_writer._get_nvidia_driver_version")
     def test_rate_control_cbr_with_bitrate(self, mock_driver, _mock_enc, _mock_presets):
         mock_driver.return_value = 535
@@ -160,18 +184,32 @@ class TestConfigureNvenc:
         assert writer.output_params["-rc"] == "cbr"
         assert writer.output_params["-b:v"] == "10M"
 
-    @patch("rataGUI.plugins.video_writer._check_nvenc_new_presets_available", return_value=True)
-    @patch("rataGUI.plugins.video_writer._check_ffmpeg_encoder_available", return_value=True)
+    @patch(
+        "rataGUI.plugins.video_writer._check_nvenc_new_presets_available",
+        return_value=True,
+    )
+    @patch(
+        "rataGUI.plugins.video_writer._check_ffmpeg_encoder_available",
+        return_value=True,
+    )
     @patch("rataGUI.plugins.video_writer._get_nvidia_driver_version")
-    def test_rate_control_cbr_zero_bitrate_defaults(self, mock_driver, _mock_enc, _mock_presets):
+    def test_rate_control_cbr_zero_bitrate_defaults(
+        self, mock_driver, _mock_enc, _mock_presets
+    ):
         mock_driver.return_value = 535
         writer = self._make_nvenc_writer(rate_control="cbr", bitrate_mbps=0)
         config = MagicMock()
         VideoWriter._configure_nvenc(writer, "h264_nvenc", config)
         assert writer.output_params["-b:v"] == "8M"
 
-    @patch("rataGUI.plugins.video_writer._check_nvenc_new_presets_available", return_value=True)
-    @patch("rataGUI.plugins.video_writer._check_ffmpeg_encoder_available", return_value=True)
+    @patch(
+        "rataGUI.plugins.video_writer._check_nvenc_new_presets_available",
+        return_value=True,
+    )
+    @patch(
+        "rataGUI.plugins.video_writer._check_ffmpeg_encoder_available",
+        return_value=True,
+    )
     @patch("rataGUI.plugins.video_writer._get_nvidia_driver_version")
     def test_gpu_index(self, mock_driver, _mock_enc, _mock_presets):
         mock_driver.return_value = 535
@@ -180,8 +218,14 @@ class TestConfigureNvenc:
         VideoWriter._configure_nvenc(writer, "h264_nvenc", config)
         assert writer.output_params["-gpu"] == "2"
 
-    @patch("rataGUI.plugins.video_writer._check_nvenc_new_presets_available", return_value=True)
-    @patch("rataGUI.plugins.video_writer._check_ffmpeg_encoder_available", return_value=True)
+    @patch(
+        "rataGUI.plugins.video_writer._check_nvenc_new_presets_available",
+        return_value=True,
+    )
+    @patch(
+        "rataGUI.plugins.video_writer._check_ffmpeg_encoder_available",
+        return_value=True,
+    )
     @patch("rataGUI.plugins.video_writer._get_nvidia_driver_version")
     def test_b_frames(self, mock_driver, _mock_enc, _mock_presets):
         mock_driver.return_value = 535
@@ -190,8 +234,14 @@ class TestConfigureNvenc:
         VideoWriter._configure_nvenc(writer, "h264_nvenc", config)
         assert writer.output_params["-bf"] == "3"
 
-    @patch("rataGUI.plugins.video_writer._check_nvenc_new_presets_available", return_value=True)
-    @patch("rataGUI.plugins.video_writer._check_ffmpeg_encoder_available", return_value=True)
+    @patch(
+        "rataGUI.plugins.video_writer._check_nvenc_new_presets_available",
+        return_value=True,
+    )
+    @patch(
+        "rataGUI.plugins.video_writer._check_ffmpeg_encoder_available",
+        return_value=True,
+    )
     @patch("rataGUI.plugins.video_writer._get_nvidia_driver_version")
     def test_unsupported_pix_fmt_defaults(self, mock_driver, _mock_enc, _mock_presets):
         mock_driver.return_value = 535
@@ -202,8 +252,14 @@ class TestConfigureNvenc:
         VideoWriter._configure_nvenc(writer, "h264_nvenc", config)
         assert writer.output_params["-pix_fmt"] == "yuv420p"
 
-    @patch("rataGUI.plugins.video_writer._check_nvenc_new_presets_available", return_value=True)
-    @patch("rataGUI.plugins.video_writer._check_ffmpeg_encoder_available", return_value=True)
+    @patch(
+        "rataGUI.plugins.video_writer._check_nvenc_new_presets_available",
+        return_value=True,
+    )
+    @patch(
+        "rataGUI.plugins.video_writer._check_ffmpeg_encoder_available",
+        return_value=True,
+    )
     @patch("rataGUI.plugins.video_writer._get_nvidia_driver_version")
     def test_sdk10_tune_applied(self, mock_driver, _mock_enc, _mock_presets):
         mock_driver.return_value = 535
@@ -214,8 +270,14 @@ class TestConfigureNvenc:
 
     # --- av1_nvenc-specific tests ---
 
-    @patch("rataGUI.plugins.video_writer._check_nvenc_new_presets_available", return_value=True)
-    @patch("rataGUI.plugins.video_writer._check_ffmpeg_encoder_available", return_value=True)
+    @patch(
+        "rataGUI.plugins.video_writer._check_nvenc_new_presets_available",
+        return_value=True,
+    )
+    @patch(
+        "rataGUI.plugins.video_writer._check_ffmpeg_encoder_available",
+        return_value=True,
+    )
     @patch("rataGUI.plugins.video_writer._get_nvidia_driver_version")
     def test_av1_nvenc_b_frames_skipped(self, mock_driver, _mock_enc, _mock_presets):
         """av1_nvenc does not support B-frames; -bf should not appear."""
@@ -225,8 +287,14 @@ class TestConfigureNvenc:
         VideoWriter._configure_nvenc(writer, "av1_nvenc", config)
         assert "-bf" not in writer.output_params
 
-    @patch("rataGUI.plugins.video_writer._check_nvenc_new_presets_available", return_value=True)
-    @patch("rataGUI.plugins.video_writer._check_ffmpeg_encoder_available", return_value=True)
+    @patch(
+        "rataGUI.plugins.video_writer._check_nvenc_new_presets_available",
+        return_value=True,
+    )
+    @patch(
+        "rataGUI.plugins.video_writer._check_ffmpeg_encoder_available",
+        return_value=True,
+    )
     @patch("rataGUI.plugins.video_writer._get_nvidia_driver_version")
     def test_av1_nvenc_low_driver_warns(self, mock_driver, _mock_enc, _mock_presets):
         """av1_nvenc should warn when driver < 520."""
@@ -240,11 +308,21 @@ class TestConfigureNvenc:
 
     # --- CUDA safety tests ---
 
-    @patch("rataGUI.plugins.video_writer._check_nvenc_new_presets_available", return_value=True)
-    @patch("rataGUI.plugins.video_writer._check_ffmpeg_cuda_available", return_value=False)
-    @patch("rataGUI.plugins.video_writer._check_ffmpeg_encoder_available", return_value=True)
+    @patch(
+        "rataGUI.plugins.video_writer._check_nvenc_new_presets_available",
+        return_value=True,
+    )
+    @patch(
+        "rataGUI.plugins.video_writer._check_ffmpeg_cuda_available", return_value=False
+    )
+    @patch(
+        "rataGUI.plugins.video_writer._check_ffmpeg_encoder_available",
+        return_value=True,
+    )
     @patch("rataGUI.plugins.video_writer._get_nvidia_driver_version")
-    def test_cuda_unavailable_disables_hwaccel(self, mock_driver, _mock_enc, _mock_cuda, _mock_presets):
+    def test_cuda_unavailable_disables_hwaccel(
+        self, mock_driver, _mock_enc, _mock_cuda, _mock_presets
+    ):
         """When CUDA is not in ffmpeg, gpu_pixel_conversion should be disabled."""
         mock_driver.return_value = 535
         writer = self._make_nvenc_writer(gpu_pixel_conversion=True)
@@ -253,11 +331,21 @@ class TestConfigureNvenc:
         assert writer._use_hwaccel is False
         assert writer.gpu_pixel_conversion is False
 
-    @patch("rataGUI.plugins.video_writer._check_nvenc_new_presets_available", return_value=True)
-    @patch("rataGUI.plugins.video_writer._check_ffmpeg_cuda_available", return_value=True)
-    @patch("rataGUI.plugins.video_writer._check_ffmpeg_encoder_available", return_value=True)
+    @patch(
+        "rataGUI.plugins.video_writer._check_nvenc_new_presets_available",
+        return_value=True,
+    )
+    @patch(
+        "rataGUI.plugins.video_writer._check_ffmpeg_cuda_available", return_value=True
+    )
+    @patch(
+        "rataGUI.plugins.video_writer._check_ffmpeg_encoder_available",
+        return_value=True,
+    )
     @patch("rataGUI.plugins.video_writer._get_nvidia_driver_version")
-    def test_cuda_available_enables_hwaccel(self, mock_driver, _mock_enc, _mock_cuda, _mock_presets):
+    def test_cuda_available_enables_hwaccel(
+        self, mock_driver, _mock_enc, _mock_cuda, _mock_presets
+    ):
         """When CUDA is available, gpu_pixel_conversion should enable hwaccel."""
         mock_driver.return_value = 535
         writer = self._make_nvenc_writer(gpu_pixel_conversion=True)
@@ -320,7 +408,9 @@ class TestFFMPEGWriter:
     @patch("rataGUI.plugins.video_writer._which")
     def test_init_finds_ffmpeg(self, mock_which, tmp_path):
         mock_which.return_value = "/usr/bin/ffmpeg"
-        writer = FFMPEG_Writer(str(tmp_path / "test.mp4"), input_dict={}, output_dict={})
+        writer = FFMPEG_Writer(
+            str(tmp_path / "test.mp4"), input_dict={}, output_dict={}
+        )
         assert writer._FFMPEG_PATH == "/usr/bin/ffmpeg"
         assert writer.initialized is False
 
@@ -334,7 +424,9 @@ class TestFFMPEGWriter:
     @patch("rataGUI.plugins.video_writer.which")
     def test_start_process_sets_input_size(self, mock_which, tmp_path):
         mock_which.return_value = "/usr/bin/ffmpeg"
-        writer = FFMPEG_Writer(str(tmp_path / "test.mp4"), input_dict={}, output_dict={})
+        writer = FFMPEG_Writer(
+            str(tmp_path / "test.mp4"), input_dict={}, output_dict={}
+        )
 
         with patch("rataGUI.plugins.video_writer.sp") as mock_sp:
             mock_proc = MagicMock()
@@ -353,7 +445,9 @@ class TestFFMPEGWriter:
     @patch("rataGUI.plugins.video_writer.which")
     def test_start_process_grayscale(self, mock_which, tmp_path):
         mock_which.return_value = "/usr/bin/ffmpeg"
-        writer = FFMPEG_Writer(str(tmp_path / "test.mp4"), input_dict={}, output_dict={})
+        writer = FFMPEG_Writer(
+            str(tmp_path / "test.mp4"), input_dict={}, output_dict={}
+        )
 
         with patch("rataGUI.plugins.video_writer.sp") as mock_sp:
             mock_proc = MagicMock()
@@ -464,11 +558,21 @@ class TestHwaccelFlags:
             call_kwargs = mock_sp.Popen.call_args
             assert call_kwargs[1]["bufsize"] == 1024 * 1024
 
-    @patch("rataGUI.plugins.video_writer._check_nvenc_new_presets_available", return_value=True)
-    @patch("rataGUI.plugins.video_writer._check_ffmpeg_cuda_available", return_value=True)
-    @patch("rataGUI.plugins.video_writer._check_ffmpeg_encoder_available", return_value=True)
+    @patch(
+        "rataGUI.plugins.video_writer._check_nvenc_new_presets_available",
+        return_value=True,
+    )
+    @patch(
+        "rataGUI.plugins.video_writer._check_ffmpeg_cuda_available", return_value=True
+    )
+    @patch(
+        "rataGUI.plugins.video_writer._check_ffmpeg_encoder_available",
+        return_value=True,
+    )
     @patch("rataGUI.plugins.video_writer._get_nvidia_driver_version")
-    def test_configure_nvenc_sets_hwaccel_flag(self, mock_driver, _mock_enc, _mock_cuda, _mock_presets):
+    def test_configure_nvenc_sets_hwaccel_flag(
+        self, mock_driver, _mock_enc, _mock_cuda, _mock_presets
+    ):
         """Verify _configure_nvenc sets _use_hwaccel when gpu_pixel_conversion is True."""
         mock_driver.return_value = 535
         writer = MagicMock()
@@ -486,10 +590,18 @@ class TestHwaccelFlags:
 
         assert writer._use_hwaccel is True
 
-    @patch("rataGUI.plugins.video_writer._check_nvenc_new_presets_available", return_value=True)
-    @patch("rataGUI.plugins.video_writer._check_ffmpeg_encoder_available", return_value=True)
+    @patch(
+        "rataGUI.plugins.video_writer._check_nvenc_new_presets_available",
+        return_value=True,
+    )
+    @patch(
+        "rataGUI.plugins.video_writer._check_ffmpeg_encoder_available",
+        return_value=True,
+    )
     @patch("rataGUI.plugins.video_writer._get_nvidia_driver_version")
-    def test_configure_nvenc_no_hwaccel_without_gpu_conversion(self, mock_driver, _mock_enc, _mock_presets):
+    def test_configure_nvenc_no_hwaccel_without_gpu_conversion(
+        self, mock_driver, _mock_enc, _mock_presets
+    ):
         """Verify _configure_nvenc does NOT set _use_hwaccel when gpu_pixel_conversion is False."""
         mock_driver.return_value = 535
         writer = MagicMock()
@@ -530,10 +642,7 @@ class TestCheckFfmpegEncoderAvailable:
     def test_encoder_not_found(self, mock_sp, _mock_which):
         mock_sp.run.return_value = MagicMock(
             returncode=0,
-            stdout=(
-                "Encoders:\n"
-                " V..... libx264              libx264 H.264\n"
-            ),
+            stdout=("Encoders:\n V..... libx264              libx264 H.264\n"),
         )
         assert _check_ffmpeg_encoder_available("av1_nvenc") is False
 
@@ -591,35 +700,50 @@ class TestConfigureSvtav1:
     def setup_method(self):
         vw_module._ffmpeg_encoder_cache = {}
 
-    @patch("rataGUI.plugins.video_writer._check_ffmpeg_encoder_available", return_value=True)
+    @patch(
+        "rataGUI.plugins.video_writer._check_ffmpeg_encoder_available",
+        return_value=True,
+    )
     def test_text_preset_mapped(self, _mock_enc):
         writer = MagicMock(spec=VideoWriter)
         writer.output_params = {"-preset": "fast", "-crf": "30"}
         VideoWriter._configure_svtav1(writer, "libsvtav1")
         assert writer.output_params["-preset"] == "8"
 
-    @patch("rataGUI.plugins.video_writer._check_ffmpeg_encoder_available", return_value=True)
+    @patch(
+        "rataGUI.plugins.video_writer._check_ffmpeg_encoder_available",
+        return_value=True,
+    )
     def test_nvenc_preset_mapped(self, _mock_enc):
         writer = MagicMock(spec=VideoWriter)
         writer.output_params = {"-preset": "p4", "-crf": "30"}
         VideoWriter._configure_svtav1(writer, "libsvtav1")
         assert writer.output_params["-preset"] == "5"
 
-    @patch("rataGUI.plugins.video_writer._check_ffmpeg_encoder_available", return_value=True)
+    @patch(
+        "rataGUI.plugins.video_writer._check_ffmpeg_encoder_available",
+        return_value=True,
+    )
     def test_numeric_preset_preserved(self, _mock_enc):
         writer = MagicMock(spec=VideoWriter)
         writer.output_params = {"-preset": "8", "-crf": "30"}
         VideoWriter._configure_svtav1(writer, "libsvtav1")
         assert writer.output_params["-preset"] == "8"
 
-    @patch("rataGUI.plugins.video_writer._check_ffmpeg_encoder_available", return_value=True)
+    @patch(
+        "rataGUI.plugins.video_writer._check_ffmpeg_encoder_available",
+        return_value=True,
+    )
     def test_out_of_range_numeric_defaults(self, _mock_enc):
         writer = MagicMock(spec=VideoWriter)
         writer.output_params = {"-preset": "20", "-crf": "30"}
         VideoWriter._configure_svtav1(writer, "libsvtav1")
         assert writer.output_params["-preset"] == "5"
 
-    @patch("rataGUI.plugins.video_writer._check_ffmpeg_encoder_available", return_value=False)
+    @patch(
+        "rataGUI.plugins.video_writer._check_ffmpeg_encoder_available",
+        return_value=False,
+    )
     def test_encoder_unavailable_warns(self, _mock_enc):
         writer = MagicMock(spec=VideoWriter)
         writer.output_params = {"-preset": "medium"}

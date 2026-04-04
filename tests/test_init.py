@@ -1,20 +1,22 @@
 import os
-import pytest
 
 
 class TestPackageInit:
     def test_version_defined(self):
         import rataGUI
+
         assert hasattr(rataGUI, "__version__")
         assert isinstance(rataGUI.__version__, str)
         assert len(rataGUI.__version__) > 0
 
     def test_launch_config_is_dict(self):
         import rataGUI
+
         assert isinstance(rataGUI.launch_config, dict)
 
     def test_add_file_logger(self, tmp_path):
         import rataGUI
+
         log_dir = str(tmp_path / "logs")
         rataGUI.add_file_logger(log_dir)
 
