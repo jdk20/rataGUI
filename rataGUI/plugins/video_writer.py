@@ -1,4 +1,9 @@
 from rataGUI.plugins.base_plugin import BasePlugin
+from rataGUI.plugins.video_codec_rules import (
+    NVENC_CODECS as _NVENC_CODECS,
+    NVENC_ONLY_KEYS as _NVENC_ONLY_KEYS,
+    NVENC_PIXEL_FORMATS as _NVENC_PIXEL_FORMATS,
+)
 from rataGUI.utils import slugify
 
 import os
@@ -15,9 +20,6 @@ logger = logging.getLogger(__name__)
 # Cached NVIDIA driver version (None = not yet checked, False = unavailable).
 # Caching avoids repeated nvidia-smi subprocess calls on every VideoWriter init.
 _nvidia_driver_version_cache = None
-
-# NVENC codec names (single source of truth)
-_NVENC_CODECS = ("h264_nvenc", "hevc_nvenc", "av1_nvenc")
 
 
 def _get_nvidia_driver_version():
@@ -250,14 +252,7 @@ class VideoWriter(BasePlugin):
     }
 
     # NVENC-specific config keys that should not be passed directly as ffmpeg args
-    _NVENC_CONFIG_KEYS = {
-        "Rate Control",
-        "Bitrate (Mbps)",
-        "GPU Index",
-        "B-Frames",
-        "Tune",
-        "GPU Pixel Conversion",
-    }
+    _NVENC_CONFIG_KEYS = _NVENC_ONLY_KEYS | {"B-Frames"}
 
     def __init__(self, cam_widget, config, queue_size=0):
         """Initialize the video writer, detecting available codecs and configuring ffmpeg settings."""
@@ -504,9 +499,8 @@ class VideoWriter(BasePlugin):
                 self.output_params["-bf"] = str(self.b_frames)
 
         # --- Pixel format validation for NVENC ---
-        nvenc_pix_fmts = {"yuv420p", "nv12", "p010le", "yuv444p", "yuv444p16le"}
         pix_fmt = self.output_params.get("-pix_fmt", "yuv420p")
-        if pix_fmt not in nvenc_pix_fmts:
+        if pix_fmt not in _NVENC_PIXEL_FORMATS:
             logger.warning(
                 f"Pixel format '{pix_fmt}' is not supported by {vcodec}, defaulting to yuv420p"
             )

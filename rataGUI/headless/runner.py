@@ -183,6 +183,11 @@ class PipelineRunner:
                 user_plugin = plugin_overrides.get(pname, {})
                 if user_plugin:
                     pconfig.set_many(user_plugin)
+                if pcls.__name__ == "VideoWriter" and user_plugin:
+                    from rataGUI.plugins.video_codec_rules import validate_config
+
+                    codec = user_plugin.get("vcodec", pconfig.get("vcodec"))
+                    validate_config(codec, user_plugin, strict=True)
                 try:
                     ctx.plugins.append(pcls(ctx, pconfig))
                     ctx.plugin_names.append(pcls.__name__)

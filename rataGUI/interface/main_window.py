@@ -346,7 +346,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             for key, setting in props.items():
                 add_config_handler(config, key, setting)
 
-            layout = make_config_layout(config)
+            layout, _ = make_config_layout(config)
             tab.setLayout(layout)
             self.cam_props.addTab(tab, self.camera_names[camID])
 
@@ -413,10 +413,61 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                         if key not in settings:
                             add_config_handler(config, key, value=False)
 
-            layout = make_config_layout(config, cols=2)
+            layout, row_map = make_config_layout(config, cols=2)
+
+            if cls.__name__ == "VideoWriter":
+                self._connect_videowriter_codec_signal(config, row_map)
 
             tab.setLayout(layout)
             self.plugin_settings.addTab(tab, plugin_name)
+
+    def _connect_videowriter_codec_signal(self, config, row_map):
+        """Wire the vcodec combobox to dynamically show/hide codec-specific options."""
+        from rataGUI.plugins.video_codec_rules import (
+            get_hidden_keys,
+            get_valid_presets,
+            get_valid_pixel_formats,
+        )
+
+        self._vw_row_map = row_map
+        vcodec_widget = config.handlers["vcodec"]
+
+        def on_vcodec_changed(codec):
+            hidden = get_hidden_keys(codec)
+
+            # Show/hide form rows
+            for key, (form, row_idx) in self._vw_row_map.items():
+                if key == "vcodec":
+                    continue
+                form.setRowVisible(row_idx, key not in hidden)
+
+            # Repopulate preset combobox
+            preset_widget = config.handlers["speed (preset)"]
+            old_preset = preset_widget.currentText()
+            preset_widget.blockSignals(True)
+            preset_widget.clear()
+            valid_presets = get_valid_presets(codec)
+            if valid_presets:
+                preset_widget.addItems(valid_presets)
+                idx = preset_widget.findText(old_preset)
+                preset_widget.setCurrentIndex(idx if idx >= 0 else 0)
+            preset_widget.blockSignals(False)
+
+            # Repopulate pixel format combobox
+            pf_widget = config.handlers["pixel format"]
+            old_pf = pf_widget.currentText()
+            pf_widget.blockSignals(True)
+            pf_widget.clear()
+            valid_pf = get_valid_pixel_formats(codec)
+            if valid_pf:
+                pf_widget.addItems(valid_pf)
+                idx = pf_widget.findText(old_pf)
+                pf_widget.setCurrentIndex(idx if idx >= 0 else 0)
+            pf_widget.blockSignals(False)
+
+        vcodec_widget.currentTextChanged.connect(on_vcodec_changed)
+        # Set initial visibility based on default codec
+        on_vcodec_changed(vcodec_widget.currentText())
 
     def populate_plugin_pipeline(self):
         """Build and refresh the camera-plugin pipeline matrix table."""
@@ -643,7 +694,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                 add_config_handler(config, key, setting)
         self.trigger_configs[deviceID] = config
 
-        config_layout = make_config_layout(config, extend_line_edits=False)
+        config_layout, _ = make_config_layout(config, extend_line_edits=False)
         delete_btn = QtWidgets.QToolButton()
         delete_btn.setFixedSize(15, 15)
         delete_btn.setText("X")
@@ -1100,13 +1151,14 @@ def add_config_handler(config, key: str, value) -> None:
 
 
 def make_config_layout(config, cols: int = 2, extend_line_edits: bool = True):
-    """
-    Generate a QHBoxLayout based on the input ConfigManager where each column is a QFormLayout
+    """Generate a QHBoxLayout based on the input ConfigManager where each column is a QFormLayout.
+
     For each row, the label is the config dict key, and the field is the config handler for that key.
 
     :param config: ConfigManager
     :param cols: Number of columns to use
-    :return: QHBoxLayout
+    :return: Tuple of (layout, row_map) where row_map maps config key to
+        ``(QFormLayout, row_index)`` for use with ``setRowVisible()``.
     """
     layout = QtWidgets.QHBoxLayout()
     forms = [QtWidgets.QFormLayout() for _ in range(cols)]
@@ -1117,6 +1169,7 @@ def make_config_layout(config, cols: int = 2, extend_line_edits: bool = True):
         form.setHorizontalSpacing(8)
         layout.addLayout(form)
 
+    row_map = {}
     long_line_edits = []
     count = 0
     for key in config.get_visible_keys():
@@ -1125,15 +1178,18 @@ def make_config_layout(config, cols: int = 2, extend_line_edits: bool = True):
         label = QtWidgets.QLabel(key)
 
         if isinstance(handler, QtWidgets.QLineEdit) and extend_line_edits:
-            long_line_edits.append((label, handler))
+            long_line_edits.append((key, label, handler))
         else:
+            row_idx = forms[f_index].rowCount()
             forms[f_index].addRow(label, handler)
+            row_map[key] = (forms[f_index], row_idx)
             count += 1
 
     if len(long_line_edits) > 0:
         line_form = QtWidgets.QFormLayout()
         line_form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
-        for label, handler in long_line_edits:
+        for key, label, handler in long_line_edits:
+            row_idx = line_form.rowCount()
             label_text = label.text().lower()
             if "directory" in label_text:
                 hbox = QtWidgets.QHBoxLayout()
@@ -1155,14 +1211,15 @@ def make_config_layout(config, cols: int = 2, extend_line_edits: bool = True):
                 line_form.addRow(label, hbox)
             else:
                 line_form.addRow(label, handler)
+            row_map[key] = (line_form, row_idx)
 
         new_layout = QtWidgets.QVBoxLayout()
         new_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         new_layout.addLayout(line_form)
         new_layout.addLayout(layout)
-        return new_layout
+        return new_layout, row_map
 
-    return layout
+    return layout, row_map
 
 
 def open_file_dialog(line_edit, is_dir: bool) -> None:
