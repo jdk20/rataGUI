@@ -40,6 +40,7 @@ class BaseCamera(ABC):
         self.display_name = None
         self._running = False
         self.frames_acquired = 0
+        self.props_complete = True
 
     @abstractmethod
     def initializeCamera(
@@ -52,6 +53,10 @@ class BaseCamera(ABC):
         :param plugin_names: List of plugin names to determine plugin-dependent settings
         """
         raise NotImplementedError()
+
+    def getDeviceProps(self) -> Tuple[Dict[str, Any], List[str]]:
+        """Optional hook: (props to merge over DEFAULT_PROPS, DEFAULT_PROPS keys to drop)."""
+        return {}, []
 
     @abstractmethod
     def readCamera(self) -> Tuple[bool, NDArray]:
@@ -101,13 +106,10 @@ class BaseCamera(ABC):
         :param config_dict: Plain dict of camera settings.
         :param plugin_names: List of plugin name strings.
         """
-        from unittest.mock import MagicMock
+        from rataGUI.headless.context import HeadlessConfigManager
 
         camera = cls(camera_id)
-        config = MagicMock()
-        config.as_dict.return_value = dict(config_dict)
-        config.get.side_effect = lambda key, default=None: config_dict.get(key, default)
-        config.set = MagicMock()
+        config = HeadlessConfigManager(config_dict)
 
         success = camera.initializeCamera(config, plugin_names)
         if not success:
